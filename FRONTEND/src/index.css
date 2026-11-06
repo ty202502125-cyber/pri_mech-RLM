@@ -1,0 +1,68 @@
+/* Fonts.
+   Atkinson Hyperlegible Next: body and interface text, built for legibility.
+   Newsreader: headlines and big numbers, gives the system an academic voice.
+   If the machines are often offline, self-host with:
+   npm i @fontsource-variable/newsreader @fontsource-variable/atkinson-hyperlegible-next
+   and import them in main.jsx instead of this @import. The fallbacks below keep it readable either way. */
+@import url("https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,200..800;1,200..800&family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..700&display=swap");
+
+/* Shared document defaults. Components and theme tokens live in App.css. */
+:root {
+  font-family:
+    "Atkinson Hyperlegible Next", "Segoe UI", system-ui, -apple-system, Arial,
+    sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-weight: 400;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  min-width: 320px;
+  min-height: 100%;
+  margin: 0;
+}
+body {
+  min-height: 100vh;
+}
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+button {
+  color: inherit;
+}
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+:focus-visible {
+  outline: 3px solid var(--focus, #a12a45);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

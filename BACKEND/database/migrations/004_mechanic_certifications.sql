@@ -1,0 +1,13 @@
+USE bicycle_mechanic;
+
+CREATE TABLE IF NOT EXISTS mechanic_certifications (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  body VARCHAR(80) NOT NULL,
+  title VARCHAR(180) NOT NULL,
+  year VARCHAR(20) NOT NULL,
+  image_url VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_certifications_created (created_at)
+) ENGINE=InnoDB;

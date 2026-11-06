@@ -1,0 +1,26 @@
+{
+  "name": "bicycle-mechanic-backend",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "db:setup": "node scripts/setup-database.js",
+    "db:check": "node scripts/check-database.js",
+    "test": "node tests/workflow-smoke.js",
+    "db:migrate:int-ids": "node scripts/migrate-int-ids.js",
+    "create-admin": "node scripts/create-admin.js",
+    "test:workflow": "node tests/workflow-smoke.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-rate-limit": "^8.7.2",
+    "jsonwebtoken": "^9.0.3",
+    "mysql2": "^3.12.0"
+  }
+}
