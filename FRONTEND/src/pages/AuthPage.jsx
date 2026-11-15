@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import api from '../services/api'
+import api, { getCsrfCookie } from '../services/api'
 import { Footer } from '../components/SiteChrome'
 
 export function AuthPage({ mode, onSignedIn }) {
@@ -14,6 +14,7 @@ export function AuthPage({ mode, onSignedIn }) {
     e.preventDefault(); setError(''); setBusy(true)
     const f = new FormData(e.currentTarget)
     try {
+      await getCsrfCookie()
       if (isReg) await api.post('/auth/register', {
         fullName: f.get('fullName'), email: f.get('email'), password: f.get('password'),
       })

@@ -113,6 +113,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   bicycle_brand VARCHAR(100) NULL,
   bicycle_model VARCHAR(100) NULL,
   problem_description VARCHAR(2000) NOT NULL,
+  customer_response VARCHAR(1000) NULL,
   preferred_at DATETIME NOT NULL,
   scheduled_at DATETIME NULL,
   status ENUM('pending_review', 'awaiting_customer_response', 'awaiting_customer', 'rescheduled', 'awaiting_payment', 'payment_submitted', 'payment_rejected', 'confirmed', 'in_progress', 'rejected', 'cancelled', 'no_show', 'completed') NOT NULL DEFAULT 'pending_review',
@@ -123,7 +124,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   confirmed_slot DATETIME GENERATED ALWAYS AS (CASE WHEN status = 'confirmed' THEN scheduled_at ELSE NULL END) STORED,
   PRIMARY KEY (id),
   UNIQUE KEY uq_bookings_ref (booking_ref),
-  UNIQUE KEY uq_bookings_confirmed_slot (confirmed_slot),
+  KEY idx_bookings_confirmed_slot (confirmed_slot),
   KEY idx_bookings_customer_created (customer_id, created_at),
   KEY idx_bookings_status_preferred (status, preferred_at),
   CONSTRAINT fk_bookings_customer FOREIGN KEY (customer_id) REFERENCES users(id) ON DELETE RESTRICT,
@@ -220,6 +221,7 @@ CREATE TABLE IF NOT EXISTS booking_reschedules (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
   booking_id INT UNSIGNED NOT NULL,
   proposed_by INT UNSIGNED NOT NULL,
+  previous_booking_status VARCHAR(40) NULL,
   proposed_at DATETIME NOT NULL,
   response ENUM('pending', 'accepted', 'declined') NOT NULL DEFAULT 'pending',
   response_note VARCHAR(1000) NULL,
@@ -241,6 +243,7 @@ CREATE TABLE IF NOT EXISTS repair_records (
   estimate_status ENUM('not_required', 'pending', 'approved', 'declined') NOT NULL DEFAULT 'not_required',
   final_amount DECIMAL(10,2) NULL,
   completion_notes TEXT NULL,
+  picked_up_at DATETIME NULL,
   warranty_until DATE NULL,
   updated_by INT UNSIGNED NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -309,6 +312,8 @@ CREATE TABLE IF NOT EXISTS payment_transactions (
   admin_note VARCHAR(1000) NULL,
   verified_by INT UNSIGNED NULL,
   verified_at DATETIME NULL,
+  review_reminder_count TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  review_reminded_at DATETIME NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
@@ -319,6 +324,46 @@ CREATE TABLE IF NOT EXISTS payment_transactions (
   CONSTRAINT fk_payment_transaction_group_payment FOREIGN KEY (booking_group_payment_id) REFERENCES booking_group_payments(id) ON DELETE RESTRICT,
   CONSTRAINT fk_payment_transaction_verifier FOREIGN KEY (verified_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS mechanic_profile (
+  id TINYINT UNSIGNED NOT NULL DEFAULT 1,
+  full_name VARCHAR(120) NOT NULL,
+  role VARCHAR(160) NOT NULL,
+  bio TEXT NOT NULL,
+  highlights JSON NOT NULL,
+  expertise JSON NOT NULL,
+  licences JSON NOT NULL,
+  agreements JSON NOT NULL DEFAULT (JSON_ARRAY()),
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  CONSTRAINT chk_mechanic_profile_singleton CHECK (id = 1)
+) ENGINE=InnoDB;
+INSERT IGNORE INTO mechanic_profile (id, full_name, role, bio, highlights, expertise, licences)
+VALUES (
+  1,
+  'Palluh, Abdallah J.',
+  'Head Mechanic & Student',
+  'For more than four years, I have worked on road bikes, mountain bikes, fixed-gear builds, and everyday commuters. I provide practical tune-ups, drivetrain troubleshooting, wheel and tyre work, brake adjustments, and upgrades for different riding styles. Every rider deserves careful attention, clear repair options, and recommendations that fit the bike and the way they ride.',
+  JSON_ARRAY(
+    JSON_OBJECT('icon', 'wrench', 'val', '4+ years', 'sub', 'Professional experience'),
+    JSON_OBJECT('icon', 'bike', 'val', '200+', 'sub', 'Bicycles serviced'),
+    JSON_OBJECT('icon', 'tools', 'val', '6', 'sub', 'Service specialties'),
+    JSON_OBJECT('icon', 'pin', 'val', 'Zamboanga City', 'sub', 'Based locally')
+  ),
+  JSON_ARRAY(
+    JSON_OBJECT('area', 'Road & gravel', 'detail', 'Race-ready tune-ups, fit adjustments, shifting checks, and reliable long-distance setups.'),
+    JSON_OBJECT('area', 'Mountain bike', 'detail', 'Suspension checks, dropper posts, tubeless conversions, and trail-focused tuning.'),
+    JSON_OBJECT('area', 'Drivetrain & gears', 'detail', 'Accurate indexing, cable tension, derailleur alignment, and Di2 or AXS setup checks.'),
+    JSON_OBJECT('area', 'Wheels & tyres', 'detail', 'Wheel truing, spoke replacement, hub bearings, punctures, and tubeless setup.'),
+    JSON_OBJECT('area', 'Brakes', 'detail', 'Hydraulic bleeding, rotor alignment, pad replacement, and rim-brake adjustment.'),
+    JSON_OBJECT('area', 'City & commuter', 'detail', 'Practical lighting, racks, fenders, drivetrain care, and dependable daily-bike setup.')
+  ),
+  JSON_ARRAY(
+    'DTI-Registered Business — Zamboanga City',
+    'BIR Certificate of Registration',
+    'Barangay Business Permit — current year'
+  )
+);
 
 -- Mechanic featured bicycle builds
 CREATE TABLE IF NOT EXISTS mechanic_builds (

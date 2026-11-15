@@ -1,6 +1,9 @@
-import { useEffect, useState } from 'react'
-import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import api from './services/api'
+import RepairWorkspace from './components/RepairWorkspace'
+import mechanicPortrait from './assets/palluh.png'
+import mechanicHoverPortrait from './assets/palshy.png'
 import './App.css'
 
 /* ── Formatters ───────────────────────────────────────────── */
@@ -19,9 +22,37 @@ const mediaUrl = value => {
   const apiOrigin = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/api\/?$/, '')
   return `${apiOrigin}${value}`
 }
+const jsonArray = value => {
+  if (Array.isArray(value)) return value
+  if (typeof value !== 'string') return []
+  try { const parsed = JSON.parse(value); return Array.isArray(parsed) ? parsed : [] } catch { return [] }
+}
 
 const CITY = 'Zamboanga City'
 const nowLocal = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+const WORKSHOP_TIME_ZONE = 'Asia/Manila'
+const workshopDateKey = (date = new Date()) => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: WORKSHOP_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(date)
+  const values = Object.fromEntries(parts.filter(part => part.type !== 'literal').map(part => [part.type, part.value]))
+  return `${values.year}-${values.month}-${values.day}`
+}
+const workshopTimeLabel = value => new Intl.DateTimeFormat([], {
+  timeZone: WORKSHOP_TIME_ZONE, hour: 'numeric', minute: '2-digit',
+}).format(new Date(value))
+
+/* ── Animation configuration (tune here) ───────────────────── */
+const ANIMATION_CONFIG = {
+  // Cursor / dotted background
+  cursorPulseMs: 2200,
+  dotDriftMs: 14000,
+  // Mechanic portrait Ken-Burns
+  portraitKenBurnsMs: 20000,
+  // Shuffle interval for featured builds & certificates
+  shuffleEnabled: true,
+  shuffleIntervalMs: 2000,
+}
 
 /* ── Wrench icon ──────────────────────────────────────────── */
 function WrenchIcon() {
@@ -64,7 +95,6 @@ function Header({ user, onLogout, dark, onToggleTheme }) {
             aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
             title={dark ? 'Switch to light mode' : 'Switch to dark mode'}>
             <span aria-hidden="true">{dark ? '☀' : '☾'}</span>
-            <small>{dark ? 'Light' : 'Dark'}</small>
           </button>
         </nav>
       </div>
@@ -80,25 +110,81 @@ function Footer() {
     instagram: '', // paste your Instagram URL here to show the link
     facebook: 'https://www.facebook.com/legends.hub.7/',
   }
+  const year = new Date().getFullYear()
   return (
     <footer className="ftr">
       <div className="ftr-inner">
+        <div className="ftr-brand">
+          <span className="ftr-brand-name">Spoke &amp; Wrench</span>
+          <span className="ftr-brand-sub">Independent Bicycle Service · {CITY}</span>
+        </div>
         <div className="ftr-contact">
-          <strong>Contact the mechanic</strong>
+          <strong>Get in touch</strong>
           <div className="ftr-contact-grid">
             <a className="ftr-highlight" href={`mailto:${contact.email}`}><span>Email</span><strong>{contact.email}</strong></a>
             <a className="ftr-highlight" href={`tel:${contact.phone.replace(/[^+\d]/g, '')}`}><span>Phone</span><strong>{contact.phone}</strong></a>
-            {contact.instagram && <a className="ftr-highlight" href={contact.instagram} target="_blank" rel="noreferrer"><span>Social</span><strong>Instagram &#8599;</strong></a>}
-            <a className="ftr-highlight" href={contact.facebook} target="_blank" rel="noreferrer"><span>Social</span><strong>Facebook &#8599;</strong></a>
+            {contact.instagram && <a className="ftr-highlight" href={contact.instagram} target="_blank" rel="noreferrer"><span>Instagram</span><strong>View profile &#8599;</strong></a>}
+            <a className="ftr-highlight" href={contact.facebook} target="_blank" rel="noreferrer"><span>Facebook</span><strong>View page &#8599;</strong></a>
           </div>
         </div>
-        <div className="ftr-right">
-          <span>Service by appointment only</span>
-          <span>Thoughtful repairs. More miles together.</span>
+        <div className="ftr-bottom">
+          <span>© {year} Spoke &amp; Wrench · All rights reserved</span>
+          <span>By appointment only · Zamboanga City, PH</span>
         </div>
       </div>
     </footer>
   )
+}
+
+function CursorEffects() {
+  const cursorRef = useRef(null)
+  const ringRef = useRef(null)
+
+  useEffect(() => {
+    const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)')
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+    if (!finePointer.matches || reducedMotion.matches) return undefined
+
+    const cursor = cursorRef.current
+    const ring = ringRef.current
+    document.body.classList.add('cursor-effects-enabled')
+    const move = event => {
+      document.body.style.setProperty('--cursor-x', `${event.clientX}px`)
+      document.body.style.setProperty('--cursor-y', `${event.clientY}px`)
+      cursor.style.transform = `translate3d(${event.clientX}px, ${event.clientY}px, 0)`
+      ring.style.transform = `translate3d(${event.clientX}px, ${event.clientY}px, 0)`
+    }
+    const updateTarget = event => {
+      const target = event.target instanceof Element
+        ? event.target.closest('a, button, input, select, textarea, label, [role="button"]')
+        : null
+      document.body.classList.toggle('cursor-over-target', Boolean(target))
+      document.body.classList.toggle('cursor-native', Boolean(target?.matches('input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea, [contenteditable="true"]')))
+    }
+    const hide = () => document.body.classList.add('cursor-hidden')
+    const show = () => document.body.classList.remove('cursor-hidden')
+
+    window.addEventListener('pointermove', move, { passive: true })
+    window.addEventListener('pointerover', updateTarget, { passive: true })
+    window.addEventListener('pointerout', updateTarget, { passive: true })
+    document.documentElement.addEventListener('pointerleave', hide)
+    document.documentElement.addEventListener('pointerenter', show)
+    return () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerover', updateTarget)
+      window.removeEventListener('pointerout', updateTarget)
+      document.documentElement.removeEventListener('pointerleave', hide)
+      document.documentElement.removeEventListener('pointerenter', show)
+      document.body.classList.remove('cursor-effects-enabled', 'cursor-over-target', 'cursor-native', 'cursor-hidden')
+      document.body.style.removeProperty('--cursor-x')
+      document.body.style.removeProperty('--cursor-y')
+    }
+  }, [])
+
+  return <div className="cursor-effects" aria-hidden="true">
+    <span ref={ringRef} className="cursor-effects-ring" />
+    <span ref={cursorRef} className="cursor-effects-dot" />
+  </div>
 }
 
 /* ── Service list ─────────────────────────────────────────── */
@@ -128,90 +214,114 @@ function ServiceList() {
   )
 }
 
-/* ── Mechanic data ────────────────────────────────────────── */
-const MECHANIC = {
-  name: 'Palluh, Abdallah J.',
-  role: 'Head Mechanic & Student',
-  photo: new URL('./assets/palluh.png', import.meta.url).href,
-  bio: `For more than four years, I've worked on road bikes, mountain bikes, fixed-gear builds, and everyday commuters. That hands-on experience covers routine tune-ups, drivetrain troubleshooting, wheel and tyre work, brake adjustments, and practical upgrades for different riding styles.
-
-I started Spoke & Wrench because every rider deserves careful attention, not just the ones with expensive bikes. I'll explain what I find, talk through repair options, and recommend work that fits the bike and the way you ride.`,
-  highlights: [
-    { icon: '🔧', val: '4+ years',    sub: 'Professional experience' },
-    { icon: '🚴', val: '200+',       sub: 'Bicycles serviced'       },
-    { icon: '🔩', val: '6',           sub: 'Service specialties'     },
-    { icon: '📍', val: CITY, sub: 'Based locally'           },
-  ],
-  expertise: [
-    { area: 'Road & gravel',      detail: 'Race-ready tune-ups, fit adjustments, shifting checks, and reliable long-distance setups.' },
-    { area: 'Mountain bike',      detail: 'Suspension checks, dropper posts, tubeless conversions, and trail-focused tuning.' },
-    { area: 'Drivetrain & gears', detail: 'Accurate indexing, cable tension, derailleur alignment, and Di2 or AXS setup checks.' },
-    { area: 'Wheels & tyres',     detail: 'Wheel truing, spoke replacement, hub bearings, punctures, and tubeless setup.' },
-    { area: 'Brakes',             detail: 'Hydraulic bleeding, rotor alignment, pad replacement, and rim-brake adjustment.' },
-    { area: 'City & commuter',    detail: 'Practical lighting, racks, fenders, drivetrain care, and dependable daily-bike setup.' },
-  ],
-  licences: [
-    `DTI-Registered Business — ${CITY}`,
-    'BIR Certificate of Registration',
-    'Barangay Business Permit — current year',
-  ],
-}
-const BIKE_CATEGORIES = ['Road bike', 'Mountain bike', 'Gravel bike', 'City / commuter bike']
-
-/* Hero preview services */
-const HERO_SVCS = [
-  { name: 'Full tune-up',      price: '₱850' },
-  { name: 'Brake adjustment',  price: '₱350' },
-  { name: 'Drivetrain clean',  price: '₱600' },
-  { name: 'Flat tyre repair',  price: '₱200' },
-]
+const BIKE_CATEGORIES = ['Road bike', 'Mountain bike', 'Gravel bike', 'City / commuter bike','Fixed gear', 'Folding bike', 'Other']
 
 /* ── Mechanic section ─────────────────────────────────────── */
 function CertificateCard({ certificate }) {
   const image = mediaUrl(certificate.image_url)
-  return <a className='cert-row' href={image} target='_blank' rel='noreferrer' aria-label={'Open ' + certificate.title + ' certificate image'}>
-    <img className='cert-image' src={image} alt={certificate.title + ' certificate'} loading='lazy' />
+  return <div className='cert-row'>
+    <PortfolioImage className='cert-image' src={image} alt={certificate.title + ' certificate'} />
     <span className='cert-copy'><span className='cert-badge'>{certificate.body}</span><span className='cert-name'>{certificate.title}</span><span className='cert-open'>Click to view certificate</span></span>
     <span className='cert-year'>{certificate.year}</span>
-  </a>
+  </div>
+}
+
+function PortfolioImage({ src, alt, className = '', loading = 'lazy', fallbackLabel = '' }) {
+  const [loaded, setLoaded] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const [open, setOpen] = useState(false)
+  return (
+    <><button type="button" className={`portfolio-image-frame ${className} ${loaded ? 'is-loaded' : ''}`} aria-label={`View ${alt}`} onClick={() => loaded && setOpen(true)} aria-busy={!loaded && !failed}>
+      {!loaded && !failed && <span className='portfolio-image-skeleton' aria-hidden='true' />}
+      {failed
+        ? <span className='portfolio-image-fallback'>{fallbackLabel || 'Image unavailable'}</span>
+        : <img className='portfolio-image-element' src={src} alt={alt} loading={loading} fetchPriority={loading === 'eager' ? 'high' : undefined} onLoad={() => setLoaded(true)} onError={() => setFailed(true)} />}
+    </button>{open && <ImageLightbox src={src} alt={alt} onClose={() => setOpen(false)} />}</>
+  )
+}
+
+function ImageLightbox({ src, alt, onClose }) {
+  useEffect(() => { const close = e => e.key === 'Escape' && onClose(); window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close) }, [onClose])
+  return <div className="image-lightbox" role="dialog" aria-modal="true" aria-label={alt} onClick={onClose}><button type="button" className="image-lightbox-close" onClick={onClose} aria-label="Close image">×</button><img src={src} alt={alt} onClick={e => e.stopPropagation()} /></div>
 }
 
 function MechanicSection() {
+  const [profile, setProfile] = useState(null)
   const [builds, setBuilds] = useState([])
-  const [certifications, setCertifications] = useState([])
+  const [displayBuilds, setDisplayBuilds] = useState([])
+  const [displayCerts, setDisplayCerts] = useState([])
+  const [shuffleTick, setShuffleTick] = useState(0)
   const [bookingEnabled, setBookingEnabled] = useState(null)
   useEffect(() => {
-    api.get('/builds').then(({ data }) => setBuilds(data.builds)).catch(() => {})
-    api.get('/certifications').then(({ data }) => setCertifications(data.certifications)).catch(() => {})
+    api.get('/mechanic-profile').then(({ data }) => setProfile(data.profile)).catch(() => setProfile(null))
+    api.get('/builds').then(({ data }) => { setBuilds(data.builds); setDisplayBuilds(data.builds) }).catch(() => {})
+    api.get('/certifications').then(({ data }) => setDisplayCerts(data.certifications)).catch(() => {})
     const checkBookingStatus = () => api.get('/booking-status').then(({ data }) => setBookingEnabled(data.enabled)).catch(() => setBookingEnabled(null))
     checkBookingStatus()
     const timer = window.setInterval(checkBookingStatus, 30000)
     return () => window.clearInterval(timer)
   }, [])
+  // Shuffle featured builds & certificates on an interval (configurable).
+  useEffect(() => {
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (reduced || !ANIMATION_CONFIG.shuffleEnabled) return undefined
+    const shuffle = (list) => {
+      const next = [...list]
+      for (let i = next.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1))
+        ;[next[i], next[j]] = [next[j], next[i]]
+      }
+      return next
+    }
+    const id = window.setInterval(() => {
+      setDisplayBuilds(prev => (prev.length > 1 ? shuffle(prev) : prev))
+      setDisplayCerts(prev => (prev.length > 1 ? shuffle(prev) : prev))
+      setShuffleTick(tick => tick + 1)
+    }, ANIMATION_CONFIG.shuffleIntervalMs)
+    return () => window.clearInterval(id)
+  }, [])
   return (
     <section className='mech-section' id='mechanic'>
       <div className='mech-col'>
-        <span className='eyebrow'>The person behind the wrench</span>
-        <h2 className='section-h2'>Your mechanic.</h2>
-        <div className='mech-bio-grid'>
-          <div className='mech-photo-stack'>
-            <img src={MECHANIC.photo} alt={MECHANIC.name + ', mechanic at Spoke & Wrench'} className='mech-portrait' onError={e => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'grid' }} />
-            <div className='mech-portrait-fallback'>AP</div>
+        <span className='eyebrow'>Workshop profile</span>
+        <h2 className='section-h2'>Meet the mechanic.</h2>
+        {profile ? <>
+          <div className='mech-bio-grid'>
+            <div className='mech-photo-stack'>
+              <img
+                className='mech-portrait-image mech-portrait-primary'
+                src={mechanicPortrait}
+                alt={`${profile.full_name} — mechanic at Spoke & Wrench`}
+                fetchPriority='high'
+              />
+              <img
+                className='mech-portrait-image mech-portrait-hover'
+                src={mechanicHoverPortrait}
+                alt=''
+                aria-hidden='true'
+              />
+            </div>
+            <div className='mech-info'>
+              <div className='mech-name-row'>
+                <div><div className='mech-name'>{profile.full_name}</div><div className='mech-role'>{profile.role}</div></div>
+                <div className={'mech-avail ' + (bookingEnabled === true ? 'is-open' : bookingEnabled === false ? 'is-paused' : 'is-checking')}><span className='mech-avail-dot' aria-hidden='true' /><span><strong>{bookingEnabled === true ? 'Accepting bookings' : bookingEnabled === false ? 'Bookings paused' : 'Checking availability'}</strong><small>{bookingEnabled === true ? 'New service requests are welcome' : bookingEnabled === false ? 'Please check back soon' : 'Availability updates automatically'}</small></span></div>
+              </div>
+              <p className='mech-bio-text'>{profile.bio}</p>
+              {jsonArray(profile.highlights).length > 0 && <div className='mech-highlights'>{jsonArray(profile.highlights).map((highlight, index) => <div className='mech-hl' key={`${highlight.val}-${index}`}><div className='mech-hl-icon'>{highlight.iconImage ? <PortfolioImage src={mediaUrl(highlight.iconImage)} alt={`${highlight.val} icon`} /> : '⚙'}</div><strong className='mech-hl-val'>{highlight.val}</strong><span className='mech-hl-sub'>{highlight.sub}</span></div>)}</div>}
+            </div>
           </div>
-          <div className='mech-info'>
-            <div className='mech-name-row'><div><div className='mech-name'>{MECHANIC.name}</div><div className='mech-role'>{MECHANIC.role}</div></div><div className={'mech-avail ' + (bookingEnabled === true ? 'is-open' : bookingEnabled === false ? 'is-paused' : 'is-checking')}><span className='mech-avail-dot' aria-hidden='true' /><span><strong>{bookingEnabled === true ? 'Accepting bookings' : bookingEnabled === false ? 'Bookings paused' : 'Checking availability'}</strong><small>{bookingEnabled === true ? 'New service requests are welcome' : bookingEnabled === false ? 'Please check back soon' : 'Availability updates automatically'}</small></span></div></div>
-            <p className='mech-bio-text'>{MECHANIC.bio}</p>
-            <div className='mech-highlights'>{MECHANIC.highlights.map(h => <div className='mech-hl' key={h.val}><div className='mech-hl-icon'>{h.icon}</div><strong className='mech-hl-val'>{h.val}</strong><span className='mech-hl-sub'>{h.sub}</span></div>)}</div>
-          </div>
-        </div>
+          {jsonArray(profile.expertise).length > 0 && <section className='mech-skills'><div className='mech-skills-heading'><div><div className='mech-block-h'>Skills &amp; specialties</div><p>Workshop expertise and services.</p></div><span>{jsonArray(profile.expertise).length} specialties</span></div><div className='mech-expertise-grid'>{jsonArray(profile.expertise).map((expertise, index) => <article className='mech-exp-card' key={`${expertise.area}-${index}`}>{expertise.image && <PortfolioImage className='expertise-photo' src={mediaUrl(expertise.image)} alt={expertise.area} />}<span className='mech-exp-index'>0{index + 1}</span><span className='mech-exp-area'>{expertise.area}</span><p className='mech-exp-detail'>{expertise.detail}</p></article>)}</div></section>}
+        </> : <div className='mech-profile-notice'>
+          <div className={'mech-avail ' + (bookingEnabled === true ? 'is-open' : bookingEnabled === false ? 'is-paused' : 'is-checking')}><span className='mech-avail-dot' aria-hidden='true' /><span><strong>{bookingEnabled === true ? 'Accepting bookings' : bookingEnabled === false ? 'Bookings paused' : 'Checking availability'}</strong><small>{bookingEnabled === true ? 'New service requests are welcome' : bookingEnabled === false ? 'Please check back soon' : 'Availability updates automatically'}</small></span></div>
+          <p>Mechanic profile details are not configured yet.</p>
+        </div>}
         <section className='mech-builds'>
           <div className='mech-builds-head'><div><h3 className='mech-block-h'>Featured bike builds</h3><p className='mech-builds-note'>Workshop builds published by the mechanic.</p></div><span className='mech-build-count'>{builds.length} {builds.length === 1 ? 'build' : 'builds'}</span></div>
-          <div className='mech-bike-wrap'>{builds.map(build => <article className='mech-build-card' key={build.id}><div className='mech-build-image'><img className='mech-bike-img' src={mediaUrl(build.image_url)} alt={build.title} loading='lazy' /></div><div className='mech-bike-details'><h4>{build.title}</h4><p>Owner: <strong>{build.owner_name}</strong></p>{build.social_url && <a className='mech-owner-link' href={build.social_url} target='_blank' rel='noreferrer'>View owner socials</a>}</div></article>)}{!builds.length && <p className='muted'>Featured builds will appear here when the mechanic publishes them.</p>}</div>
+          <div className='mech-bike-wrap' key={`builds-${shuffleTick}`}>{displayBuilds.map(build => <article className='mech-build-card' key={build.id}><div className='mech-build-image'><PortfolioImage className='mech-bike-img' src={mediaUrl(build.image_url)} alt={build.title} /></div><div className='mech-bike-details'><h4>{build.title}</h4><p>Owner: <strong>{build.owner_name}</strong></p>{build.social_url && <a className='mech-owner-link' href={build.social_url} target='_blank' rel='noreferrer'>View owner socials</a>}</div></article>)}{!displayBuilds.length && <p className='muted'>Featured builds will appear here when the mechanic publishes them.</p>}</div>
         </section>
-        <section className='mech-skills'><div className='mech-skills-heading'><div><div className='mech-block-h'>Skills &amp; specialties</div><p>Focused repairs and setup for the bikes and components riders use every day.</p></div><span>{MECHANIC.expertise.length} specialties</span></div><div className='mech-expertise-grid'>{MECHANIC.expertise.map((e, index) => <article className='mech-exp-card' key={e.area}><span className='mech-exp-index'>0{index + 1}</span><span className='mech-exp-area'>{e.area}</span><p className='mech-exp-detail'>{e.detail}</p></article>)}</div></section>
         <div className='mech-creds'>
-          <section><div className='mech-block-h'>Certifications</div><div className='cert-list'>{certifications.map(c => <CertificateCard key={c.id} certificate={c} />)}{!certifications.length && <p className='muted'>Certifications will appear here when published.</p>}</div></section>
-          <section><div className='mech-block-h'>Licences &amp; registrations</div><ul className='lic-list'>{MECHANIC.licences.map(l => <li className='lic-item' key={l}><span className='lic-dot' aria-hidden='true' />{l}</li>)}</ul><p className='lic-note'>Physical copies available on request at the workshop.</p></section>
+          {profile && <section><div className='mech-block-h'>Certifications</div><div className='cert-list' key={`certs-${shuffleTick}`}>{displayCerts.map(c => <CertificateCard key={c.id} certificate={c} />)}{!displayCerts.length && <p className='muted'>Certifications will appear here when published.</p>}</div></section>}
+          {profile && <section><div className='mech-block-h'>Licences, registrations &amp; agreements</div><ul className='lic-list'>{[...jsonArray(profile.licences), ...jsonArray(profile.agreements)].map((licence, index) => <li className='lic-item' key={`${licence.title || licence}-${index}`}><span className='lic-dot' aria-hidden='true' />{typeof licence === 'string' ? licence : <>{licence.title}{licence.image && <PortfolioImage className='credential-photo' src={mediaUrl(licence.image)} alt={licence.title} />}</>}</li>)}</ul>{!jsonArray(profile.licences).length && !jsonArray(profile.agreements).length && <p className='muted'>No licences or agreements are listed.</p>}</section>}
         </div>
       </div>
     </section>
@@ -237,6 +347,23 @@ function Testimonials() {
     </section>
   )
 }
+
+function HeroServicePreview() {
+  const [services, setServices] = useState([])
+  useEffect(() => {
+    api.get('/services')
+      .then(({ data }) => setServices((data.services || []).slice(0, 4)))
+      .catch(() => setServices([]))
+  }, [])
+  if (!services.length) return <p className="hero-service-empty">Explore workshop services for current options and pricing.</p>
+  return services.map(service => (
+    <div className="hero-svc-row" key={service.id}>
+      <span className="hero-svc-name">{service.name}</span>
+      <span className="hero-svc-price">From {money(service.starting_price)}</span>
+    </div>
+  ))
+}
+
 function Home() {
   return (
     <>
@@ -254,7 +381,7 @@ function Home() {
               </h1>
               <p className="hero-sub">
                 Careful, honest bicycle service for {CITY} riders.
-                One mechanic, your bike, the full story — before we turn a single bolt.
+                Thoughtful repairs, clear estimates, and updates at every step.
               </p>
               <div className="hero-actions">
                 <Link className="btn btn-primary btn-lg" to="/book">Book a service</Link>
@@ -276,24 +403,7 @@ function Home() {
                   <span className="hero-card-title">Popular services</span>
                   <span className="hero-card-badge">Workshop services</span>
                 </div>
-                {HERO_SVCS.map(s => (
-                  <div className="hero-svc-row" key={s.name}>
-                    <span className="hero-svc-name">{s.name}</span>
-                    <span className="hero-svc-price">{s.price}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="hero-stats-card">
-                {[
-                  { num: '4+',  lbl: 'Years experience' },
-                  { num: '200+', lbl: 'Bikes serviced' },
-                  { num: String(MECHANIC.expertise.length), lbl: 'Service specialties' },
-                ].map(s => (
-                  <div className="hero-stat-item" key={s.num}>
-                    <span className="hero-stat-num">{s.num}</span>
-                    <span className="hero-stat-lbl">{s.lbl}</span>
-                  </div>
-                ))}
+                <HeroServicePreview />
               </div>
             </div>
           </div>
@@ -462,6 +572,7 @@ function AuthPage({ mode, onSignedIn }) {
             <p className="auth-switch">
               {isReg ? 'Already have an account? ' : 'New to the workshop? '}
               <Link to={isReg ? '/login' : '/register'}>{isReg ? 'Sign in' : 'Create an account'}</Link>
+              {!isReg && <> · <Link to="/forgot-password">Forgot password?</Link></>}
             </p>
           </div>
         </div>
@@ -469,6 +580,96 @@ function AuthPage({ mode, onSignedIn }) {
       <Footer />
     </>
   )
+}
+
+function ForgotPasswordPage() {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [result, setResult] = useState(null)
+
+  async function submit(event) {
+    event.preventDefault()
+    const form = event.currentTarget
+    setBusy(true); setError(''); setResult(null)
+    const email = new FormData(form).get('email')
+    try {
+      const { data } = await api.post('/auth/forgot-password', { email })
+      setResult(data)
+      form.reset()
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not request a password reset.')
+    } finally { setBusy(false) }
+  }
+
+  return <RecoveryPage title="Reset your password" eyebrow="Account recovery" intro="Enter the email address on your account. We’ll show a generic confirmation so account details stay private." sideNote="Password reset links expire after 30 minutes. Email delivery can be configured by the workshop later.">
+    <span className="eyebrow">Forgot password</span>
+    <h1>Get a reset link.</h1>
+    <p>Use the email address associated with your account.</p>
+    <div className="stage"><div className="form-card" aria-busy={busy}>
+      <form onSubmit={submit}>
+        <label className="field-label" htmlFor="reset-email">Email address<input id="reset-email" name="email" type="email" autoComplete="email" maxLength={254} required /></label>
+        {error && <div className="msg msg-error" role="alert">{error}</div>}
+        {result && <div className="msg msg-success" role="status">{result.message} {!result.resetUrl && 'Email delivery is not configured yet; ask the workshop to provide the reset link.'}</div>}
+        {result?.resetUrl && <p className="field-hint">Development reset link: <a className="text-link" href={result.resetUrl}>Open password reset</a></p>}
+        <div className="form-footer"><button className="btn btn-primary btn-full" disabled={busy}>{busy ? 'Please wait…' : 'Request reset link'}</button></div>
+      </form>
+    </div></div>
+    <p className="auth-switch"><Link to="/login">Back to sign in</Link></p>
+  </RecoveryPage>
+}
+
+function ResetPasswordPage() {
+  const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const token = searchParams.get('token') || ''
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState(false)
+
+  async function submit(event) {
+    event.preventDefault()
+    const form = event.currentTarget
+    setError(''); setSuccess(false)
+    const values = Object.fromEntries(new FormData(form))
+    if (values.password !== values.confirmPassword) return setError('Passwords do not match.')
+    if (new TextEncoder().encode(values.password).length > 72) return setError('Password must be no more than 72 UTF-8 bytes.')
+    setBusy(true)
+    try {
+      await api.post('/auth/reset-password', { token, password: values.password })
+      setSuccess(true)
+      form.reset()
+      window.setTimeout(() => navigate('/login', { replace: true }), 1800)
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not reset your password. Request a new link and try again.')
+    } finally { setBusy(false) }
+  }
+
+  return <RecoveryPage title="Choose a new password" eyebrow="Account recovery" intro="Set a new password for your workshop account." sideNote="Choose at least 10 characters. Reset links can only be used once.">
+    <span className="eyebrow">Choose a new password</span>
+    <h1>Make it a strong one.</h1>
+    <p>This reset link is valid for one use and expires after 30 minutes.</p>
+    <div className="stage"><div className="form-card" aria-busy={busy}>
+      <form onSubmit={submit}>
+        <label className="field-label" htmlFor="new-password">New password<input id="new-password" name="password" type="password" autoComplete="new-password" minLength={10} maxLength={72} required /></label>
+        <label className="field-label" htmlFor="confirm-password">Confirm password<input id="confirm-password" name="confirmPassword" type="password" autoComplete="new-password" minLength={10} maxLength={72} required /></label>
+        {error && <div className="msg msg-error" role="alert">{error}</div>}
+        {success && <div className="msg msg-success" role="status">Password updated. Redirecting to sign in…</div>}
+        {!token && <div className="msg msg-error" role="alert">This reset link is missing its token. Request a new one.</div>}
+        <div className="form-footer"><button className="btn btn-primary btn-full" disabled={busy || !token || success}>{busy ? 'Updating…' : 'Update password'}</button></div>
+      </form>
+    </div></div>
+    <p className="auth-switch"><Link to="/forgot-password">Request another reset link</Link></p>
+  </RecoveryPage>
+}
+
+function RecoveryPage({ title, eyebrow, intro, sideNote, children }) {
+  return <>
+    <main><div className="auth-layout">
+      <aside className="auth-side"><span className="eyebrow">{eyebrow}</span><h2>{title}.</h2><p>{intro}</p><div className="auth-side-note">{sideNote}</div></aside>
+      <div className="auth-form-side">{children}</div>
+    </div></main>
+    <Footer />
+  </>
 }
 
 /* ── Route guard ──────────────────────────────────────────── */
@@ -499,7 +700,11 @@ function BookingPage({ user }) {
   }, [])
 
   function updateBike(key, changes) {
-    setBikes(current => current.map(bike => bike.key === key ? { ...bike, ...changes } : bike))
+    setBikes(current => current.map(bike => bike.key === key ? {
+      ...bike,
+      ...changes,
+      ...(changes.serviceIds ? { preferredAt: '' } : {}),
+    } : bike))
   }
 
   async function submit(e) {
@@ -508,6 +713,7 @@ function BookingPage({ user }) {
     try {
       for (const bike of bikes) {
         if (!bike.serviceIds.length) throw new Error('Choose at least one service for every bicycle.')
+        if (!bike.preferredAt) throw new Error('Choose an available drop-off time for every bicycle.')
         if (bike.photos.length > 3) throw new Error('Choose no more than three photos for each bicycle.')
         if (bike.photos.some(photo => photo.size > 10 * 1024 * 1024)) throw new Error('Each bicycle photo must be 10 MB or smaller.')
       }
@@ -595,11 +801,11 @@ function BookingPage({ user }) {
                   {estimate > 0 && <p className="service-selection-total">Starting estimate: <strong>{money(estimate)}</strong></p>}
                 </div>
                 <div className="field"><label className="field-label">What's happening with this bike?<textarea value={bike.problem} onChange={event => updateBike(bike.key, { problem: event.target.value })} rows={3} minLength={8} maxLength={2000} required placeholder="Describe the issue, sounds, or anything unusual" /></label></div>
-                <div className="field"><label className="field-label">Preferred drop-off time<input type="datetime-local" min={nowLocal()} value={bike.preferredAt} onChange={event => updateBike(bike.key, { preferredAt: event.target.value })} required /></label></div>
+                <BookingTimePicker bike={bike} updateBike={updateBike} />
                 <div className="field"><label className="field-label">Bicycle photos <span className="field-opt">Optional · up to 3 photos, 10 MB each</span><input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={event => updateBike(bike.key, { photos: Array.from(event.target.files || []) })} /></label>{bike.photos.length > 0 && <span className="field-hint">{bike.photos.length} photo(s) selected{bike.photos.length > 3 ? ' — choose no more than three' : ''}</span>}</div>
               </section>
             })}
-            <button className="btn btn-outline btn-sm" type="button" onClick={() => setBikes(current => [...current, newBookingBike()])} disabled={bikes.length >= 10}>Add another bicycle</button>
+            <button className="btn btn-outline btn-sm booking-add-bike" type="button" onClick={() => setBikes(current => [...current, newBookingBike()])} disabled={bikes.length >= 10}>Add another bicycle</button>
             <section className="field service-picker" aria-labelledby="payment-choice-heading">
               <h2 id="payment-choice-heading" className="field-label">How would you like to pay?</h2>
               <label className="service-choice"><input type="radio" name="paymentChoice" value="together" checked={paymentChoice === 'together'} onChange={() => setPaymentChoice('together')} /><span className="service-choice-copy"><strong>Pay for all bicycles together</strong><small>One payment submission is available once every bicycle is approved.</small></span></label>
@@ -627,7 +833,75 @@ function BookingPage({ user }) {
 }
 
 function newBookingBike() {
-  return { key: `${Date.now()}-${Math.random()}`, bicycleId: '', bicycleType: '', brand: '', model: '', serviceIds: [], problem: '', preferredAt: '', photos: [] }
+  return { key: `${Date.now()}-${Math.random()}`, bicycleId: '', bicycleType: '', brand: '', model: '', serviceIds: [], problem: '', preferredDate: workshopDateKey(), preferredAt: '', photos: [] }
+}
+
+function BookingTimePicker({ bike, updateBike }) {
+  const [slots, setSlots] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const date = bike.preferredDate || workshopDateKey()
+  const serviceIds = bike.serviceIds.join(',')
+
+  useEffect(() => {
+    let active = true
+    setSlots([])
+    setError('')
+    if (!date || !serviceIds) {
+      setLoading(false)
+      return () => { active = false }
+    }
+
+    setLoading(true)
+    const params = { date }
+    const ids = serviceIds.split(',')
+    if (ids.length === 1) params.serviceId = ids[0]
+    else params.serviceIds = serviceIds
+    api.get('/availability', { params })
+      .then(({ data }) => {
+        if (!active) return
+        setSlots(data.slots || [])
+        if (!data.slots?.length) setError(data.reason || 'No available drop-off times for this date and service selection.')
+      })
+      .catch(err => {
+        if (active) setError(err.response?.data?.error || 'Could not load available drop-off times.')
+      })
+      .finally(() => { if (active) setLoading(false) })
+
+    return () => { active = false }
+  }, [date, serviceIds])
+
+  return <div className="field availability-picker">
+    <span className="field-label">Preferred drop-off</span>
+    <div className="field-row">
+      <label className="field-label">
+        Date
+        <input
+          type="date"
+          min={workshopDateKey()}
+          value={date}
+          required
+          onChange={event => updateBike(bike.key, { preferredDate: event.target.value, preferredAt: '' })}
+        />
+      </label>
+      <label className="field-label">
+        Available time
+        <select
+          value={bike.preferredAt}
+          required
+          disabled={loading || !serviceIds || !slots.length}
+          onChange={event => updateBike(bike.key, { preferredAt: event.target.value })}
+        >
+          <option value="">{loading ? 'Checking availability…' : serviceIds ? 'Choose an available time' : 'Choose services first'}</option>
+          {slots.map(slot => <option key={slot.startsAt} value={slot.startsAt}>{workshopTimeLabel(slot.startsAt)}</option>)}
+        </select>
+      </label>
+    </div>
+    <span className="field-hint" aria-live="polite">
+      Times are shown in the workshop’s Asia/Manila time zone.
+      {error ? ` ${error}` : loading ? ' Checking slots…' : slots.length ? ` ${slots.length} time${slots.length === 1 ? '' : 's'} available.` : ''}
+    </span>
+  </div>
 }
 
 /* ── Account page ─────────────────────────────────────────── */
@@ -657,15 +931,26 @@ function ReviewForm({ booking, onSubmitted }) {
 
 function AccountPage({ user }) {
   const [bookings, setBookings] = useState([])
+  const [payments, setPayments] = useState([])
+  const [paymentError, setPaymentError] = useState('')
   const [error, setError]       = useState('')
 
   async function loadBookings() {
-    try {
-      const { data } = await api.get('/bookings/mine')
-      setBookings(data.bookings)
+    const [bookingResult, paymentResult] = await Promise.allSettled([
+      api.get('/bookings/mine'),
+      api.get('/customers/me/payments'),
+    ])
+    if (bookingResult.status === 'fulfilled') {
+      setBookings(bookingResult.value.data.bookings)
       setError('')
-    } catch (err) {
-      setError(err.response?.data?.error || 'Could not load bookings.')
+    } else {
+      setError(bookingResult.reason.response?.data?.error || 'Could not load bookings.')
+    }
+    if (paymentResult.status === 'fulfilled') {
+      setPayments(paymentResult.value.data.payments)
+      setPaymentError('')
+    } else {
+      setPaymentError(paymentResult.reason.response?.data?.error || 'Could not load payment history.')
     }
   }
 
@@ -697,13 +982,16 @@ function AccountPage({ user }) {
           </div>
         ) : (
           <div className="booking-list">
-            {bookings.map((item, index) => (
-              <article className="booking-card" key={item.id}>
+            {bookings.map((item, index) => {
+              const payment = payments.find(record => String(record.booking_id) === String(item.id))
+              return (
+                <article className="booking-card" key={item.id}>
                 <div>
                   <div className="booking-ref">{item.booking_ref} · {item.service_name}</div>
                   {item.group_ref && <div className="booking-ref">Request group {item.group_ref} · {item.payment_choice === 'together' ? 'pay together' : 'pay separately'}</div>}
                   <h3>{item.bicycle_type}{item.bicycle_brand ? ` · ${item.bicycle_brand}` : ''}</h3>
                   <p>{item.problem_description}</p>
+                  {item.customer_response && <div className="booking-next-step"><strong>Your response</strong><p>{item.customer_response}</p></div>}
                 </div>
                 <div className="booking-meta">
                   <span className={`status status-${item.status}`}>{item.status.replaceAll('_', ' ')}</span>
@@ -712,20 +1000,164 @@ function AccountPage({ user }) {
                 {(item.status === 'pending_review' || Number(item.photo_count) > 0) && <BookingPhotos booking={item} allowUpload={item.status === 'pending_review'} />}
                 {item.booking_group_id && item.payment_choice === 'together'
                   && bookings.findIndex(booking => booking.booking_group_id === item.booking_group_id) === index
-                  && <GroupBookingPayment bookings={bookings.filter(booking => booking.booking_group_id === item.booking_group_id)} onUpdated={loadBookings} />}
+                  && <GroupBookingPayment bookings={bookings.filter(booking => booking.booking_group_id === item.booking_group_id)} paymentRecords={payments} onUpdated={loadBookings} />}
+                {item.status === 'awaiting_customer_response' && <BookingQuestionReply booking={item} onUpdated={loadBookings} />}
+                {item.status === 'awaiting_customer' && item.pending_reschedule_id && <BookingRescheduleResponse booking={item} onUpdated={loadBookings} />}
                 {(!item.booking_group_id || item.payment_choice !== 'together')
-                  && ['awaiting_payment', 'payment_submitted', 'confirmed', 'in_progress', 'completed'].includes(item.status) && (
-                  <BookingPayment booking={item} onUpdated={loadBookings} />
+                  && ['awaiting_payment', 'payment_submitted', 'payment_rejected', 'confirmed', 'in_progress', 'completed'].includes(item.status) && (
+                  <BookingPayment booking={item} payment={payment} onUpdated={loadBookings} />
                 )}
+                <BookingCancellation booking={item} onUpdated={loadBookings} />
+                <CustomerRepairPanel booking={item} />
                 {item.status === 'completed' && (item.review_id ? <div className="review-complete"><strong>Review submitted</strong><span>{'★'.repeat(Number(item.review_rating || 0))} · {item.review_is_anonymous ? 'Posted anonymously' : 'Posted by you'}</span><p>{item.review_comment}</p></div> : <ReviewForm booking={item} onSubmitted={({ rating, comment, anonymous }) => setBookings(current => current.map(booking => booking.id === item.id ? { ...booking, review_id: `local-${item.id}`, review_rating: rating, review_comment: comment, review_is_anonymous: anonymous } : booking))} />)}
-              </article>
-            ))}
+                </article>
+              )
+            })}
           </div>
         )}
+        {paymentError && <div className="msg msg-error" role="alert">{paymentError}</div>}
       </main>
       <Footer />
     </>
   )
+}
+
+function BookingCancellation({ booking, onUpdated }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const proofPending = booking.status === 'payment_submitted' || booking.group_payment_status === 'submitted'
+  const canCancel = ['pending_review', 'awaiting_customer_response', 'awaiting_customer', 'awaiting_payment', 'payment_rejected', 'confirmed'].includes(booking.status)
+
+  if (proofPending) return <p className="cancellation-blocked" role="status">Cancellation is unavailable while payment proof is awaiting verification.</p>
+  if (!canCancel) return null
+
+  async function cancel() {
+    if (!window.confirm('Cancel this bicycle booking?')) return
+    setBusy(true); setError('')
+    try {
+      await api.patch(`/bookings/${booking.id}/cancel`)
+      await onUpdated()
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not cancel this booking.')
+    } finally { setBusy(false) }
+  }
+
+  return <div className="booking-cancel-action">
+    <button className="btn btn-danger btn-sm" type="button" disabled={busy} onClick={cancel}>{busy ? 'Cancelling…' : 'Cancel booking'}</button>
+    {error && <span className="field-hint" role="alert">{error}</span>}
+  </div>
+}
+
+function BookingQuestionReply({ booking, onUpdated }) {
+  const [message, setMessage] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+
+  async function submit(event) {
+    event.preventDefault()
+    setBusy(true); setError(''); setNotice('')
+    try {
+      await api.patch(`/bookings/${booking.id}/respond`, { message })
+      setNotice('Your response was sent to the mechanic.')
+      setMessage('')
+      await onUpdated()
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not send your response.')
+    } finally { setBusy(false) }
+  }
+
+  return <form className="booking-next-step booking-response-form" onSubmit={submit}>
+    <strong>Question from the mechanic</strong>
+    <p>{booking.admin_note || 'The mechanic has a question about this booking.'}</p>
+    <label className="field-label">Your reply<textarea value={message} onChange={event => setMessage(event.target.value)} minLength={3} maxLength={1000} rows={3} required /></label>
+    {error && <span className="field-hint" role="alert">{error}</span>}
+    {notice && <span className="field-hint" role="status">{notice}</span>}
+    <button className="btn btn-primary btn-sm" disabled={busy}>{busy ? 'Sending…' : 'Send reply'}</button>
+  </form>
+}
+
+function BookingRescheduleResponse({ booking, onUpdated }) {
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+
+  async function respond(decision) {
+    setBusy(true); setError(''); setNotice('')
+    try {
+      await api.patch(`/bookings/${booking.id}/reschedules/${booking.pending_reschedule_id}`, { decision, note })
+      setNotice(`Proposed appointment ${decision}.`)
+      await onUpdated()
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not respond to the proposed appointment.')
+    } finally { setBusy(false) }
+  }
+
+  return <section className="booking-next-step booking-response-form">
+    <strong>Proposed appointment change</strong>
+    <p>{dt(booking.proposed_reschedule_at)}</p>
+    {booking.admin_note && <p>{booking.admin_note}</p>}
+    <label className="field-label">Note to mechanic <span className="field-opt">Optional</span><textarea value={note} onChange={event => setNote(event.target.value)} maxLength={1000} rows={2} /></label>
+    {error && <span className="field-hint" role="alert">{error}</span>}
+    {notice && <span className="field-hint" role="status">{notice}</span>}
+    <div className="modal-actions">
+      <button className="btn btn-primary btn-sm" type="button" disabled={busy} onClick={() => respond('accepted')}>{busy ? 'Sending…' : 'Accept new time'}</button>
+      <button className="btn btn-outline btn-sm" type="button" disabled={busy} onClick={() => respond('declined')}>Decline new time</button>
+    </div>
+  </section>
+}
+
+function CustomerRepairPanel({ booking }) {
+  const [repair, setRepair] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const [refresh, setRefresh] = useState(0)
+
+  useEffect(() => {
+    if (!['in_progress', 'completed'].includes(booking.status)) return undefined
+    let active = true
+    api.get(`/repairs/${booking.id}`)
+      .then(({ data }) => { if (active) { setRepair(data.repair); setError('') } })
+      .catch(err => {
+        if (!active) return
+        if (err.response?.status === 404) setRepair(null)
+        else setError(err.response?.data?.error || 'Could not load repair progress.')
+      })
+    return () => { active = false }
+  }, [booking.id, booking.status, refresh])
+
+  async function decide(decision) {
+    setBusy(true); setError(''); setNotice('')
+    try {
+      await api.patch(`/repairs/${repair.id}/estimate`, { decision })
+      setNotice(decision === 'approved' ? 'Estimate approved. The mechanic can continue the repair.' : 'Estimate declined. The mechanic may send a revised estimate for your approval.')
+      setRefresh(value => value + 1)
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not submit your estimate decision.')
+    } finally { setBusy(false) }
+  }
+
+  if (!['in_progress', 'completed'].includes(booking.status) || (!repair && !error)) return null
+  return <section className="customer-repair-panel">
+    <h4>Repair progress</h4>
+    {repair && <>
+      <p>Status: <strong>{label(repair.status)}</strong></p>
+      {repair.inspection_notes && <p><strong>Inspection:</strong> {repair.inspection_notes}</p>}
+      {repair.estimate_amount !== null && <p><strong>Current estimate:</strong> {money(repair.estimate_amount)} · {label(repair.estimate_status)}</p>}
+      {repair.estimate_status === 'pending' && repair.status === 'awaiting_customer_approval' && <div className="repair-customer-actions">
+        <p>Work is on hold until you approve this estimate.</p>
+        <button className="btn btn-primary btn-sm" type="button" disabled={busy} onClick={() => decide('approved')}>Approve estimate</button>
+        <button className="btn btn-danger btn-sm" type="button" disabled={busy} onClick={() => decide('declined')}>Decline estimate</button>
+      </div>}
+      {repair.final_amount !== null && <p><strong>Final amount:</strong> {money(repair.final_amount)}</p>}
+      {repair.completion_notes && <p><strong>Completion notes:</strong> {repair.completion_notes}</p>}
+      {repair.warranty_until && <p><strong>Warranty until:</strong> {new Date(`${repair.warranty_until}T00:00:00`).toLocaleDateString()}</p>}
+    </>}
+    {error && <div className="msg msg-error" role="alert">{error}</div>}
+    {notice && <div className="msg msg-success" role="status">{notice}</div>}
+  </section>
 }
 
 function BookingPhotos({ booking, allowUpload = false }) {
@@ -781,7 +1213,7 @@ function BookingPhotos({ booking, allowUpload = false }) {
 
   if (!photos.length && !allowUpload && !error) return null
   return <>
-    {photos.length > 0 && <div className="booking-photo-list" aria-label="Bicycle photos">{photos.map((photo, index) => <a key={photo.id} href={photo.url} target="_blank" rel="noreferrer"><img src={photo.url} alt={`Bicycle photo ${index + 1}`} /></a>)}</div>}
+    {photos.length > 0 && <div className="booking-photo-list" aria-label="Bicycle photos">{photos.map((photo, index) => <PortfolioImage key={photo.id} className="thumb" src={photo.url} alt={`Bicycle photo ${index + 1}`} />)}</div>}
     {allowUpload && photos.length < 3 && <form className="booking-photo-upload" onSubmit={upload}>
       <label className="field-label">Add bicycle photos (up to {3 - photos.length} more, 10 MB each)<input name="photos" type="file" accept="image/jpeg,image/png,image/webp" multiple required /></label>
       <button className="btn btn-outline btn-sm" type="submit" disabled={busy}>{busy ? 'Uploading…' : 'Upload photos'}</button>
@@ -790,7 +1222,7 @@ function BookingPhotos({ booking, allowUpload = false }) {
   </>
 }
 
-function GroupBookingPayment({ bookings, onUpdated }) {
+function GroupBookingPayment({ bookings, paymentRecords, onUpdated }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -803,6 +1235,12 @@ function GroupBookingPayment({ bookings, onUpdated }) {
   const canSubmit = bookings.every(booking => ['awaiting_payment', 'payment_rejected'].includes(booking.status))
     && amountDue > 0 && groupStatus !== 'submitted'
   const allApproved = bookings.every(booking => ['awaiting_payment', 'payment_rejected'].includes(booking.status))
+  const paymentTransactions = bookings.flatMap(booking => {
+    const record = paymentRecords.find(payment => String(payment.booking_id) === String(booking.id))
+    return (record?.transactions || [])
+      .filter(transaction => transaction.group_payment_id)
+      .map(transaction => ({ ...transaction, bookingRef: booking.booking_ref }))
+  })
 
   async function submitPayment(event) {
     event.preventDefault()
@@ -844,12 +1282,51 @@ function GroupBookingPayment({ bookings, onUpdated }) {
       <button className="btn btn-primary btn-sm" disabled={busy}>{busy ? 'Submitting…' : 'Submit combined payment'}</button>
     </form>}
     {bookings.some(booking => booking.payment_status === 'paid') && <p>Some bicycles are already paid in full.</p>}
+    <PaymentHistory transactions={paymentTransactions} />
     {error && <div className="msg msg-error" role="alert">{error}</div>}
     {notice && <div className="msg msg-success" role="status">{notice}</div>}
   </section>
 }
 
-function BookingPayment({ booking, onUpdated }) {
+function PaymentHistory({ transactions }) {
+  const [busyId, setBusyId] = useState(null)
+  const [error, setError] = useState('')
+
+  async function openProof(transactionId) {
+    setBusyId(transactionId)
+    setError('')
+    try {
+      const { data } = await api.get(`/payments/transactions/${transactionId}/proof`, { responseType: 'blob' })
+      const url = URL.createObjectURL(data)
+      window.open(url, '_blank', 'noopener,noreferrer')
+      window.setTimeout(() => URL.revokeObjectURL(url), 60000)
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not open payment receipt.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  if (!transactions.length) return null
+  return <div className="payment-history">
+    <strong>Payment history</strong>
+    {transactions.map(transaction => (
+      <div className="payment-history-entry" key={transaction.id}>
+        <p>
+          {transaction.bookingRef && <><strong>{transaction.bookingRef}</strong> · </>}
+          {money(transaction.amount)} · {label(transaction.method)} · {label(transaction.status)}
+          {transaction.transaction_ref && <> · Ref: {transaction.transaction_ref}</>}
+        </p>
+        {transaction.verified_at && <small>Verified {dt(transaction.verified_at)}</small>}
+        {transaction.admin_note && <p>{transaction.admin_note}</p>}
+        {transaction.has_proof && <button className="btn btn-outline btn-sm" type="button" disabled={busyId === transaction.id} onClick={() => openProof(transaction.id)}>{busyId === transaction.id ? 'Opening receipt…' : 'View receipt'}</button>}
+      </div>
+    ))}
+    {error && <div className="msg msg-error" role="alert">{error}</div>}
+  </div>
+}
+
+function BookingPayment({ booking, payment, onUpdated }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -898,8 +1375,10 @@ function BookingPayment({ booking, onUpdated }) {
     <section className="booking-payment">
       <h4>Payment</h4>
       <p>Status: <strong>{label(booking.payment_status || 'pending')}</strong>
-        {amountDue != null && <> · Amount: <strong>{money(amountDue)}</strong></>}
+        {' · Amount due: '}<strong>{money(amountDue)}</strong>
+        {' · Verified paid: '}<strong>{money(booking.verified_amount)}</strong>
       </p>
+      <PaymentHistory transactions={payment?.transactions || []} />
       {canSubmit && amountDue > 0 && (
         <>
           <p>{booking.status === 'awaiting_payment'
@@ -1170,7 +1649,7 @@ function AdminCatalog({ section }) {
     </tr>))
   if (section === 'builds') rows = items.map(b => (
     <tr key={b.id}>
-      <td><img className="thumb" src={mediaUrl(b.image_url)} alt="" /></td>
+      <td><PortfolioImage className="thumb" src={mediaUrl(b.image_url)} alt={b.title} /></td>
       <td><strong>{b.title}</strong></td>
       <td>{b.owner_name}</td>
       <td>{b.social_url ? <a className="text-link" href={b.social_url} target="_blank" rel="noreferrer">Open link</a> : '—'}</td>
@@ -1178,7 +1657,7 @@ function AdminCatalog({ section }) {
     </tr>))
   if (section === 'certifications') rows = items.map(c => (
     <tr key={c.id}>
-      <td><img className="thumb" src={mediaUrl(c.image_url)} alt="" /></td>
+      <td><PortfolioImage className="thumb" src={mediaUrl(c.image_url)} alt={c.title} /></td>
       <td>{c.body}</td>
       <td><strong>{c.title}</strong></td>
       <td className="num">{c.year}</td>
@@ -1214,9 +1693,9 @@ function AdminCatalog({ section }) {
 
 /* ── Admin: bookings ──────────────────────────────────────── */
 const OPEN_STATUSES = ['pending_review', 'awaiting_customer_response', 'payment_rejected']
-const BOOKING_STATUSES = ['pending_review', 'awaiting_customer_response', 'awaiting_payment', 'payment_submitted', 'payment_rejected', 'confirmed', 'in_progress', 'completed', 'rejected', 'cancelled', 'no_show']
+const BOOKING_STATUSES = ['pending_review', 'awaiting_customer_response', 'awaiting_customer', 'awaiting_payment', 'payment_submitted', 'payment_rejected', 'confirmed', 'in_progress', 'completed', 'rejected', 'cancelled', 'no_show']
 
-function BookingModal({ item, error, onClose, onUpdate }) {
+function BookingModal({ item, error, onClose, onUpdate, onRefresh, onProposeReschedule }) {
   const actionable = OPEN_STATUSES.includes(item.status)
   const bike = [item.bicycle_type, item.bicycle_brand, item.bicycle_model].filter(Boolean).join(' · ')
   return (
@@ -1232,8 +1711,16 @@ function BookingModal({ item, error, onClose, onUpdate }) {
         <div><dt>Scheduled</dt><dd>{item.scheduled_at ? dt(item.scheduled_at) : 'Not scheduled yet'}</dd></div>
         <div className="detail-wide"><dt>Problem description</dt><dd>{item.problem_description}</dd></div>
         {item.admin_note && <div className="detail-wide"><dt>Your note</dt><dd>{item.admin_note}</dd></div>}
+        {item.customer_response && <div className="detail-wide"><dt>Customer response</dt><dd>{item.customer_response}</dd></div>}
+        {item.pending_reschedule_id && <div className="detail-wide"><dt>Proposed time</dt><dd>{dt(item.proposed_reschedule_at)}</dd></div>}
       </dl>
       {Number(item.photo_count) > 0 && <BookingPhotos booking={item} />}
+      {item.status === 'confirmed' && <section className="repair-checkin modal-section">
+        <h4>Bicycle drop-off</h4>
+        <p>Record that the bicycle has arrived before creating its repair intake.</p>
+        <button className="btn btn-primary btn-sm" type="button" onClick={() => onUpdate(item.id, 'in_progress')}>Record bicycle received</button>
+      </section>}
+      <RepairWorkspace booking={item} onUpdated={onRefresh} />
       {actionable && (
         <form className="workspace-form modal-section" onSubmit={async event => { event.preventDefault(); if (await onUpdate(item.id, 'awaiting_payment', event.currentTarget)) onClose() }}>
           <div className="field-row">
@@ -1246,6 +1733,23 @@ function BookingModal({ item, error, onClose, onUpdate }) {
           </div>
         </form>
       )}
+      {item.status === 'pending_review' && <form className="workspace-form modal-section" onSubmit={async event => {
+        event.preventDefault()
+        if (await onUpdate(item.id, 'awaiting_customer_response', event.currentTarget)) onClose()
+      }}>
+        <h4>Ask the customer a question</h4>
+        <label className="field-label">Question or information needed<textarea name="adminNote" rows={3} minLength={3} maxLength={1000} required placeholder="Ask for a detail needed to review this request." /></label>
+        <button className="btn btn-outline btn-sm" type="submit">Send question</button>
+      </form>}
+      {['pending_review', 'awaiting_payment', 'confirmed'].includes(item.status) && <form className="workspace-form modal-section" onSubmit={async event => {
+        event.preventDefault()
+        if (await onProposeReschedule(item.id, event.currentTarget)) onClose()
+      }}>
+        <h4>Propose a new appointment time</h4>
+        <label className="field-label">Proposed drop-off<input name="proposedAt" type="datetime-local" min={nowLocal()} required /></label>
+        <label className="field-label">Note to customer <span className="field-opt">Optional</span><textarea name="note" rows={2} maxLength={1000} /></label>
+        <button className="btn btn-outline btn-sm" type="submit">Send reschedule proposal</button>
+      </form>}
     </Modal>
   )
 }
@@ -1272,6 +1776,23 @@ function AdminBookings() {
       await api.patch(`/admin/bookings/${id}`, { status, scheduledAt: vals.scheduledAt, adminNote: vals.adminNote })
       setNotice('Booking updated.'); setError(''); load(); return true
     } catch (err) { setError(err.response?.data?.error || 'Could not update booking.'); setNotice(''); return false }
+  }
+
+  async function proposeReschedule(id, form) {
+    const values = Object.fromEntries(new FormData(form))
+    try {
+      await api.post(`/admin/bookings/${id}/reschedules`, {
+        proposedAt: new Date(values.proposedAt).toISOString(),
+        note: values.note,
+      })
+      setNotice('New appointment time proposed.'); setError('')
+      await load()
+      return true
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not propose a new appointment time.')
+      setNotice('')
+      return false
+    }
   }
 
   const shown = filter === 'all' ? bookings : bookings.filter(b => b.status === filter)
@@ -1317,7 +1838,7 @@ function AdminBookings() {
           ))}
         </DataTable>
       )}
-      {selected && <BookingModal item={selected} error={error} onClose={() => { setSelectedId(null); setError('') }} onUpdate={update} />}
+      {selected && <BookingModal item={selected} error={error} onClose={() => { setSelectedId(null); setError('') }} onUpdate={update} onRefresh={load} onProposeReschedule={proposeReschedule} />}
     </section>
   )
 }
@@ -1418,6 +1939,7 @@ function AdminPayments() {
 
 function AdminAvailability() {
   const [schedules, setSchedules] = useState([])
+  const [breakEnabledByDay, setBreakEnabledByDay] = useState({})
   const [address, setAddress] = useState('')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -1431,6 +1953,10 @@ function AdminAvailability() {
         api.get('/admin/workshop-location'),
       ])
       setSchedules(scheduleData.schedules)
+      setBreakEnabledByDay(Object.fromEntries(scheduleData.schedules.map(schedule => [
+        schedule.day_of_week,
+        Boolean(schedule.break_starts_at && schedule.break_ends_at),
+      ])))
       setAddress(locationData.address)
       setError('')
     } catch (err) { setError(err.response?.data?.error || 'Could not load availability settings.') }
@@ -1446,8 +1972,8 @@ function AdminAvailability() {
         isWorkingDay: values.isWorkingDay === 'on',
         opensAt: values.opensAt || null,
         closesAt: values.closesAt || null,
-        breakStartsAt: values.breakStartsAt || null,
-        breakEndsAt: values.breakEndsAt || null,
+        breakStartsAt: values.includeBreak === 'on' ? values.breakStartsAt || null : null,
+        breakEndsAt: values.includeBreak === 'on' ? values.breakEndsAt || null : null,
         slotMinutes: durationInMinutes(values, 'slotInterval'),
         dailyCapacityMinutes: durationInMinutes(values, 'dailyCapacity'),
         maxDropoffsPerSlot: values.maxDropoffsPerSlot,
@@ -1481,10 +2007,21 @@ function AdminAvailability() {
               <label className="field-label">Opens<input type="time" name="opensAt" defaultValue={time(schedule.opens_at)} /></label>
               <label className="field-label">Closes<input type="time" name="closesAt" defaultValue={time(schedule.closes_at)} /></label>
             </div>
-            <div className="field-row">
-              <label className="field-label">Break starts<input type="time" name="breakStartsAt" defaultValue={time(schedule.break_starts_at)} /></label>
-              <label className="field-label">Break ends<input type="time" name="breakEndsAt" defaultValue={time(schedule.break_ends_at)} /></label>
-            </div>
+            <label className="review-anonymous">
+              <input
+                type="checkbox"
+                name="includeBreak"
+                checked={breakEnabledByDay[schedule.day_of_week] ?? Boolean(schedule.break_starts_at && schedule.break_ends_at)}
+                onChange={event => setBreakEnabledByDay(current => ({ ...current, [schedule.day_of_week]: event.target.checked }))}
+              />
+              Include a break
+            </label>
+            {breakEnabledByDay[schedule.day_of_week] && (
+              <div className="field-row">
+                <label className="field-label">Break starts<input type="time" name="breakStartsAt" defaultValue={time(schedule.break_starts_at)} /></label>
+                <label className="field-label">Break ends<input type="time" name="breakEndsAt" defaultValue={time(schedule.break_ends_at)} /></label>
+              </div>
+            )}
             <DurationField label="Daily repair capacity" name="dailyCapacity" defaultMinutes={Number(schedule.daily_capacity_minutes || 600)} />
             <DurationField label="Drop-off interval" name="slotInterval" defaultMinutes={Number(schedule.slot_minutes || 60)} minMinutes={15} />
             <label className="field-label">Max bicycles per drop-off slot<input type="number" name="maxDropoffsPerSlot" min="1" max="100" defaultValue={schedule.max_dropoffs_per_slot || 1} required /></label>
@@ -1502,10 +2039,124 @@ function AdminAvailability() {
   )
 }
 
+const EMPTY_MECHANIC_PROFILE = {
+  full_name: '', role: '', bio: '',
+  highlights: [{ icon: '', iconImage: '', val: '', sub: '' }],
+  expertise: [{ area: '', detail: '', image: '' }],
+  licences: [],
+  agreements: [],
+}
+
+function profileForm(profile = {}) {
+  const licences = jsonArray(profile.licences).map(item => typeof item === 'string'
+    ? { title: item, image: '' }
+    : { title: item.title || '', image: item.image || '' })
+  return {
+    full_name: profile.full_name || '',
+    role: profile.role || '',
+    bio: profile.bio || '',
+    highlights: jsonArray(profile.highlights).length ? jsonArray(profile.highlights) : [{ icon: '', val: '', sub: '' }],
+    expertise: jsonArray(profile.expertise).length ? jsonArray(profile.expertise) : [{ area: '', detail: '' }],
+    licences,
+    agreements: jsonArray(profile.agreements),
+  }
+}
+
+function AdminMechanicProfile() {
+  const [form, setForm] = useState(EMPTY_MECHANIC_PROFILE)
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+
+  useEffect(() => {
+    let active = true
+    api.get('/mechanic-profile')
+      .then(({ data }) => { if (active) setForm(profileForm(data.profile)) })
+      .catch(err => {
+        if (!active) return
+        if (err.response?.status === 503) setNotice('No public mechanic profile is configured yet. Complete and save the fields below to publish one.')
+        else setError(err.response?.data?.error || 'Could not load the mechanic profile.')
+      })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [])
+
+  function setField(name, value) {
+    setForm(current => ({ ...current, [name]: value }))
+  }
+  function setArrayField(name, index, key, value) {
+    setForm(current => ({ ...current, [name]: current[name].map((item, position) => position === index
+      ? (typeof item === 'string' ? value : { ...item, [key]: value })
+      : item) }))
+  }
+  async function setProfileImage(name, index, key, file) {
+    if (!file) return
+    if (!file.type.startsWith('image/') || file.size > MAX_IMAGE) { setError('Choose an image no larger than 5 MB.'); return }
+    try { setArrayField(name, index, key, await fileAsDataUrl(file)); setError('') }
+    catch { setError('Could not read that image.') }
+  }
+  async function submit(event) {
+    event.preventDefault()
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const { data } = await api.put('/admin/mechanic-profile', form)
+      setForm(profileForm(data.profile))
+      setNotice(data.message || 'Public mechanic profile saved.')
+    } catch (err) {
+      setError(err.response?.data?.error || 'Could not save the mechanic profile.')
+    } finally { setBusy(false) }
+  }
+
+  if (loading) return <p className="muted">Loading mechanic profile…</p>
+  return <section className="mechanic-profile-editor">
+    <div className="table-bar"><div><h2>Public mechanic profile</h2><p>Profile details are stored in the database and shown on the public homepage.</p></div></div>
+    {error && <div className="msg msg-error" role="alert">{error}</div>}
+    {notice && <div className="msg msg-success" role="status">{notice}</div>}
+    <form className="workspace-form workspace-panel" onSubmit={submit}>
+      <div className="field-row">
+        <label className="field-label">Name<input value={form.full_name} onChange={event => setField('full_name', event.target.value)} maxLength={120} required /></label>
+        <label className="field-label">Role<input value={form.role} onChange={event => setField('role', event.target.value)} maxLength={160} required /></label>
+      </div>
+      <label className="field-label">Biography<textarea value={form.bio} onChange={event => setField('bio', event.target.value)} minLength={20} maxLength={5000} rows={5} required /></label>
+      <div className="profile-editor-list">
+        <div className="profile-editor-heading"><strong>Highlights</strong><button className="btn btn-outline btn-sm" type="button" onClick={() => setField('highlights', [...form.highlights, { icon: '', iconImage: '', val: '', sub: '' }])} disabled={form.highlights.length >= 12}>Add highlight</button></div>
+        {form.highlights.map((item, index) => <div className="profile-editor-row" key={`highlight-${index}`}>
+          <label className="field-label">Icon picture<input type="file" accept="image/*" onChange={event => setProfileImage('highlights', index, 'iconImage', event.target.files[0])} /><span className="file-input-note">JPEG, PNG, or WebP · up to 5 MB</span>{item.iconImage && <img className="profile-image-preview" src={item.iconImage} alt="Highlight icon preview" />}</label>
+          <label className="field-label">Value<input value={item.val} onChange={event => setArrayField('highlights', index, 'val', event.target.value)} maxLength={80} required /></label>
+          <label className="field-label">Description<input value={item.sub} onChange={event => setArrayField('highlights', index, 'sub', event.target.value)} maxLength={160} required /></label>
+          {form.highlights.length > 1 && <button className="btn btn-danger btn-sm" type="button" onClick={() => setField('highlights', form.highlights.filter((_, position) => position !== index))}>Remove</button>}
+        </div>)}
+      </div>
+      <div className="profile-editor-list">
+        <div className="profile-editor-heading"><strong>Expertise</strong><button className="btn btn-outline btn-sm" type="button" onClick={() => setField('expertise', [...form.expertise, { area: '', detail: '', image: '' }])} disabled={form.expertise.length >= 24}>Add specialty</button></div>
+        {form.expertise.map((item, index) => <div className="profile-editor-row expertise-editor-row" key={`expertise-${index}`}>
+          <label className="field-label">Specialty<input value={item.area} onChange={event => setArrayField('expertise', index, 'area', event.target.value)} maxLength={120} required /></label>
+          <label className="field-label">Details<textarea value={item.detail} onChange={event => setArrayField('expertise', index, 'detail', event.target.value)} maxLength={500} rows={2} required /></label>
+          <label className="field-label">Specialty picture<input type="file" accept="image/*" onChange={event => setProfileImage('expertise', index, 'image', event.target.files[0])} /><span className="file-input-note">Optional · up to 5 MB</span>{item.image && <img className="profile-image-preview" src={item.image} alt="Specialty preview" />}</label>
+          {form.expertise.length > 1 && <button className="btn btn-danger btn-sm" type="button" onClick={() => setField('expertise', form.expertise.filter((_, position) => position !== index))}>Remove</button>}
+        </div>)}
+      </div>
+      <div className="profile-editor-list">
+        <div className="profile-editor-heading"><strong>Licences &amp; registrations</strong><button className="btn btn-outline btn-sm" type="button" onClick={() => setField('licences', [...form.licences, { title: '', image: '' }])} disabled={form.licences.length >= 24}>Add licence</button></div>
+        {form.licences.map((item, index) => <div className="profile-editor-row licence-editor-row" key={`licence-${index}`}>
+          <label className="field-label">Licence or registration<input value={item.title} onChange={event => setArrayField('licences', index, 'title', event.target.value)} maxLength={250} required /><input type="file" accept="image/jpeg,image/png,image/webp" onChange={event => setProfileImage('licences', index, 'image', event.target.files[0])} /><span className="file-input-note">Optional proof image · JPEG, PNG, or WebP · up to 5 MB</span>{item.image && <img className="profile-image-preview" src={item.image} alt="Licence preview" />}</label>
+          <button className="btn btn-danger btn-sm" type="button" onClick={() => setField('licences', form.licences.filter((_, position) => position !== index))}>Remove</button>
+        </div>)}
+      </div>
+      <div className="profile-editor-list">
+        <div className="profile-editor-heading"><strong>Agreements</strong><button className="btn btn-outline btn-sm" type="button" onClick={() => setField('agreements', [...form.agreements, { title: '', image: '' }])} disabled={form.agreements.length >= 24}>Add agreement</button></div>
+        {form.agreements.map((item, index) => <div className="profile-editor-row licence-editor-row" key={`agreement-${index}`}><label className="field-label">Agreement title<input value={item.title} onChange={event => setArrayField('agreements', index, 'title', event.target.value)} maxLength={250} required /><input type="file" accept="image/*" onChange={event => setProfileImage('agreements', index, 'image', event.target.files[0])} /><span className="file-input-note">Agreement image · up to 5 MB</span>{item.image && <img className="profile-image-preview" src={item.image} alt="Agreement preview" />}</label><button className="btn btn-danger btn-sm" type="button" onClick={() => setField('agreements', form.agreements.filter((_, position) => position !== index))}>Remove</button></div>)}
+      </div>
+      <button className="btn btn-primary btn-sm" disabled={busy}>{busy ? 'Saving…' : 'Save public profile'}</button>
+    </form>
+  </section>
+}
+
 /* ── Admin page ───────────────────────────────────────────── */
 function AdminPage({ user }) {
   const [tab, setTab] = useState('bookings')
-  const tabs = [['bookings', 'Bookings'], ['payments', 'Payments'], ['availability', 'Availability'], ['services', 'Services'], ['builds', 'Builds'], ['certifications', 'Certifications']]
+  const tabs = [['bookings', 'Bookings'], ['payments', 'Payments'], ['availability', 'Availability'], ['services', 'Services'], ['builds', 'Builds'], ['certifications', 'Certifications'], ['profile', 'Mechanic profile']]
   return (
     <>
       <div className="page-banner">
@@ -1524,7 +2175,8 @@ function AdminPage({ user }) {
         {tab === 'bookings' ? <AdminBookings />
           : tab === 'payments' ? <AdminPayments />
             : tab === 'availability' ? <AdminAvailability />
-              : <AdminCatalog section={tab} />}
+              : tab === 'profile' ? <AdminMechanicProfile />
+                : <AdminCatalog section={tab} />}
       </main>
       <Footer />
     </>
@@ -1573,6 +2225,7 @@ function AppShell() {
 
   return (
     <>
+      <CursorEffects />
       <Header user={user} onLogout={logout} dark={dark} onToggleTheme={() => setDark(current => !current)} />
       <ScrollManager />
       <Routes>
@@ -1580,6 +2233,8 @@ function AppShell() {
         <Route path="/services" element={<ServicesPage />} />
         <Route path="/login"    element={user ? <Navigate to={user.role === 'admin' ? '/admin' : '/account'} /> : <AuthPage mode="login"    onSignedIn={setUser} />} />
         <Route path="/register" element={user ? <Navigate to={user.role === 'admin' ? '/admin' : '/account'} /> : <AuthPage mode="register" onSignedIn={setUser} />} />
+        <Route path="/forgot-password" element={user ? <Navigate to={user.role === 'admin' ? '/admin' : '/account'} /> : <ForgotPasswordPage />} />
+        <Route path="/reset-password" element={user ? <Navigate to={user.role === 'admin' ? '/admin' : '/account'} /> : <ResetPasswordPage />} />
         <Route path="/book"     element={<Guard user={user} role="customer"><BookingPage  user={user} /></Guard>} />
         <Route path="/account"  element={<Guard user={user} role="customer"><AccountPage  user={user} /></Guard>} />
         <Route path="/admin"    element={<Guard user={user} role="admin">   <AdminPage    user={user} /></Guard>} />

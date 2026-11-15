@@ -1,49 +1,58 @@
-# Spoke & Wrench Bicycle Service
+﻿# Spoke & Wrench Bicycle Service — RLM Stack
 
-Responsive portfolio and first booking workflow for a bicycle mechanic. It supports multiple customer accounts, account-scoped booking history, and a separate mechanic admin queue. MySQL is the source of truth.
+This project uses React, Laravel/PHP, and MySQL. The React/Vite application remains in `FRONTEND/`; the Laravel API lives at `BACKEND/`.
 
-## Project structure
+## Migration status
 
-- `FRONTEND/` — React/Vite public website, registration/login, customer booking pages, and admin interface.
-- `BACKEND/` — Express REST API, MySQL connection, authentication, migration, and development seed data.
-- `PROJECT_PLAN.md` — workflow and working assumptions.
+- The existing MySQL database `bicycle_mechanic` was inspected and backed up before Laravel setup. No Laravel migrations were run against it.
+- The Laravel API connects through ignored `BACKEND/.env`; Sanctum cookie authentication and existing roles are configured.
+- Core routes cover authentication, profiles, services, availability, bookings/groups, booking photos, payments, repairs, notifications, mechanic content, and admin scheduling/workflow.
+- The existing custom schedule was preserved. See `migration-backup/mysql-schema-report.json` for the schema inventory and before-state row counts.
+- The isolated test schema `bicycle_mechanic_rlm_test_20261112` is separate from live customer records.
+- Original upload binaries were missing at migration start. Database paths remain, but SQL backups cannot restore those files.
+- Original Express environment/manifests are preserved as `BACKEND/.env.express*` and `BACKEND/package*.express.json`; original backend and existing worktree changes are backed up in `migration-backup/`.
 
-## Run locally
+## Local requirements
 
-Requirements: Node.js/npm and MySQL 8.0 or newer.
+- Windows PowerShell, PHP 8.5, Composer 2, MySQL 8.0+, Node.js and npm.
+- Local PHP is in `BACKEND/.tools/php/`; Composer PHAR is `BACKEND/.tools/composer.phar`. Neither is on system PATH.
+- PHP extensions used by Laravel include `curl`, `fileinfo`, `intl`, `mbstring`, `openssl`, `pdo_mysql`, and `zip`.
 
-1. Start MySQL. In a MySQL client connected as an administrator, create the application account (replace the example password with the same password you will put in `.env`):
+## Run the applications
 
-   ```sql
-   CREATE USER 'bicycle_app'@'localhost' IDENTIFIED BY 'replace_with_a_local_password';
-   GRANT SELECT, INSERT, UPDATE, DELETE ON bicycle_mechanic.* TO 'bicycle_app'@'localhost';
-   ```
+Open two PowerShell terminals from the project root.
 
-2. In `BACKEND`, run `npm run db:setup` to create or safely update the MySQL schema, then run `npm run db:check`. This preserves existing customer, booking, and service rows. For a fresh install, `BACKEND/database/seeds/001_demo_services.sql` is optional; replace sample services and prices before using the site with real customers.
-3. In `BACKEND`, copy `.env.example` to `.env`. Set `DB_HOST=localhost`, `DB_PORT=3306`, `DB_NAME=bicycle_mechanic`, `DB_USER` to the MySQL username you use (the example is `bicycle_app`; local Workbench `root` also works), and `DB_PASSWORD` to that account's password. Set `JWT_SECRET` to a unique random value of at least 32 characters. Set a private `ADMIN_EMAIL` and `ADMIN_PASSWORD` for the mechanic login.
-4. In `BACKEND`, run `npm install`, then `npm run create-admin` to create or update the mechanic login using the credentials in `.env`.
-5. In `FRONTEND`, run `npm install`.
-6. Start the backend from `BACKEND` with `npm run dev`. The API starts even if MySQL is not connected yet, so you can work on the interface. Database-backed requests will return a setup error until `.env`, the migration, and the seed are ready.
-7. Start the frontend from `FRONTEND` with `npm run dev` and open the URL Vite prints (normally `http://localhost:5173`).
+Terminal 1 — Laravel API:
 
-The Vite server proxies `/api` requests to the backend at `http://127.0.0.1:3000`. Check `http://localhost:3000/api/health`; it reports whether the API, database tables, and required schema columns are ready. If it reports missing schema items, run `npm run db:setup` from `BACKEND` and restart the API. The public home page can render without MySQL, but services, accounts, bookings, and the mechanic queue need the database configured and seeded.
+```powershell
+Set-Location .\BACKEND
+.\.tools\php\php.exe artisan serve --host=127.0.0.1 --port=8000
+```
 
-## Current booking and payment flow
+Terminal 2 — React/Vite:
 
-- Public visitors can browse the mechanic profile and active services. Customers register, manage bicycles, submit service requests, and see only bookings belonging to their account.
-- Customers can submit one booking group for up to ten bicycles. Each bicycle has its own selected services, issue description, preferred drop-off time, and up to three private JPEG/PNG/WebP photos (10 MB each). Registered bicycles cannot be selected twice in one group.
-- Customers choose to pay together or separately. A combined payment can be submitted after every bicycle in the group is approved; the mechanic verifies that payment once, confirming all covered bicycle appointments. Separate payments continue through the existing per-booking verification flow.
-- The mechanic reviews a request, proposes a drop-off time, and approves it. Approval temporarily reserves daily repair capacity and that drop-off slot for two hours.
-- Customers submit e-wallet/bank-transfer references and proof. This is manual payment verification, not an online card gateway. Only a mechanic-verified full payment confirms the appointment and releases the private workshop address to that booking's customer.
-- Daily repair capacity uses service-duration snapshots; drop-off limits are configured separately. The API checks both under a transaction when a booking is approved. Expired unpaid reservations release capacity.
-- The admin workspace includes booking review, manual payment verification, weekly availability/capacity settings, private address settings, and service/profile catalog management.
+```powershell
+Set-Location .\FRONTEND
+npm run dev
+```
 
-The backend uses Asia/Manila for the weekly schedule and supports a configurable daily repair capacity and maximum bicycles per drop-off slot. Run `npm run db:setup` after updating the project, and configure working days and the private address in the mechanic workspace before accepting live bookings. Booking photos are stored outside the public uploads directory under `BACKEND/private-uploads/bicycle-photos/`; back up and protect this directory as private customer data.
+Open the Vite URL (normally `http://localhost:5173`). Vite proxies `/api`, `/sanctum`, and `/uploads` to Laravel on port 8000. The API health endpoint is `http://127.0.0.1:8000/api/health`.
 
-## Security notes
+The ignored `BACKEND/.env` points to the existing `bicycle_mechanic` database. Never commit environment files. Do not run `php artisan migrate` against this pre-existing schema; use the SQL files under `BACKEND/database/` as reference only. The dated SQL dump and before-state report are in ignored `migration-backup/`.
 
-Customer sign-up always creates the `customer` role. Public requests cannot create administrators. Passwords are stored as bcrypt hashes; the browser uses an HttpOnly session cookie, and API authorization is checked server-side. `.env` is ignored by Git. Use HTTPS, secure secrets, rate limits, and least-privilege MySQL credentials in production.
+The live workshop hours differ from generic hours in the original project brief. The inspected MySQL schedule remains the source of truth.
 
-## Scope boundaries
+## Dependencies
 
-The configured payment flow is manual proof submission and mechanic verification. A payment-provider integration for automatic e-wallet/card processing, provider webhooks, and customer email delivery still requires a provider account, credentials, and deployment configuration. Review the project plan before enabling the site for real customers.
+Laravel 13 and Sanctum provide the API and SPA sessions; React 19, React Router, Axios, and Vite remain the frontend. Laravel Boost is installed as development tooling. Run `npm install` from `FRONTEND/`; run `..\.tools\php\php.exe .\.tools\composer.phar install` from `BACKEND/` to install PHP dependencies.
+
+## Verification
+
+- All 77 legacy Express method/path pairs have Laravel equivalents; Laravel registers 78 API routes. `/uploads/{path}` is a separate web route.
+- PHP syntax checks, Composer validation, Laravel route registration, Pint, and the two starter PHPUnit tests passed.
+- Read-only HTTP checks passed for health/MySQL, services, booking status, schedules, availability, unauthenticated auth, CSRF cookies, and CORS preflight.
+- On the isolated test database, customer/admin authentication and role guards, profile/bicycle CRUD, booking approval, separate and group payment verification, repair estimate approval through completion, review, admin service/announcement/schedule CRUD, and public/private upload authorization passed.
+- `npm run build` passed (85 modules). `npm run lint` reported six existing React set-state-in-effect warnings and no errors.
+- Live row counts across all 29 tables still match the before-migration report. One synthetic customer and bicycle created during an early smoke attempt were deleted and counts were rechecked. Current `users` and `bicycles` auto-increment values are below their pre-migration values.
+
+Browser-level UI checks and less common refund/cash, cancellation/rejection, and location authorization paths remain follow-up checks.

@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   confirmed_slot DATETIME GENERATED ALWAYS AS (CASE WHEN status = 'confirmed' THEN scheduled_at ELSE NULL END) STORED,
   PRIMARY KEY (id),
   UNIQUE KEY uq_bookings_ref (booking_ref),
-  UNIQUE KEY uq_bookings_confirmed_slot (confirmed_slot),
+  KEY idx_bookings_confirmed_slot (confirmed_slot),
   KEY idx_bookings_customer_created (customer_id, created_at),
   KEY idx_bookings_status_preferred (status, preferred_at),
   CONSTRAINT fk_bookings_customer FOREIGN KEY (customer_id) REFERENCES users(id) ON DELETE RESTRICT,
