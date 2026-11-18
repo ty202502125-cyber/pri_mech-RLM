@@ -4,6 +4,7 @@ import api from './services/api'
 import RepairWorkspace from './components/RepairWorkspace'
 import mechanicPortrait from './assets/palluh.png'
 import mechanicHoverPortrait from './assets/palshy.png'
+import heroBikePhoto from './assets/bike-photo.jpg'
 import './App.css'
 
 /* ── Formatters ───────────────────────────────────────────── */
@@ -94,7 +95,11 @@ function Header({ user, onLogout, dark, onToggleTheme }) {
           <button className="dark-toggle theme-nav-toggle" type="button" onClick={onToggleTheme}
             aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
             title={dark ? 'Switch to light mode' : 'Switch to dark mode'}>
-            <span aria-hidden="true">{dark ? '☀' : '☾'}</span>
+            {dark ? (
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>
+            ) : (
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" /></svg>
+            )}
           </button>
         </nav>
       </div>
@@ -398,6 +403,10 @@ function Home() {
 
             {/* Right — card stack */}
             <div className="hero-art">
+              <figure className="hero-photo">
+                <img src={heroBikePhoto} alt="Carbon hardtail mountain bike resting against a rust-coloured wall" fetchPriority="high" />
+                <figcaption className="hero-photo-tag">Tuned in {CITY}</figcaption>
+              </figure>
               <div className="hero-card">
                 <div className="hero-card-top">
                   <span className="hero-card-title">Popular services</span>
@@ -433,8 +442,9 @@ function Home() {
                 { step: 'Step one',   title: "Tell us what's up",      body: "Choose a service, describe what you've noticed, and suggest a time." },
                 { step: 'Step two',   title: 'Get a clear repair plan', body: 'The mechanic reviews your request, confirms a slot, and answers any questions.' },
                 { step: 'Step three', title: 'Ride with confidence',    body: 'Approve the work, follow progress, and collect your bicycle.' },
-              ].map(c => (
+              ].map((c, index) => (
                 <article className="process-card" key={c.step}>
+                  <span className="process-step-num" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
                   <span className="process-step-label">{c.step}</span>
                   <h3>{c.title}</h3>
                   <p>{c.body}</p>
@@ -455,7 +465,7 @@ function Home() {
           <div className="cta-col">
             <div>
               <span className="eyebrow">Ready when you are</span>
-              <div className="cta-h2">Let's get your bike<br />feeling right.</div>
+              <h2 className="cta-h2">Let&apos;s get your bike<br />feeling right.</h2>
             </div>
             <Link className="btn btn-ghost btn-lg" to="/book">Book a service →</Link>
           </div>

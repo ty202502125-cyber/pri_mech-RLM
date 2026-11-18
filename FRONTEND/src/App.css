@@ -966,3 +966,130 @@ input[type="file"]::file-selector-button { margin-right: 12px; min-height: 36px;
   .mech-build-card, .cert-row, .mech-hl, .svc-card,
   .mech-exp-card, .mech-photo-stack, .mech-info, .process-card, .testi-card { opacity: 1 !important; }
 }
+
+/* ================================================================
+   v7 REFINEMENT — "Modern brutal"
+   Keeps the yellow + black identity, but with thinner rules,
+   softer offsets, small radii, sentence-case headings and one
+   accent colour per section instead of a rainbow.
+   ================================================================ */
+:root {
+  --bw: 2px;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --sh-sm: 3px 3px 0 var(--ink);
+  --sh: 4px 4px 0 var(--ink);
+  --sh-lg: 6px 6px 0 var(--ink);
+  --c-green: #3ddc6b;
+  --line: color-mix(in srgb, var(--ink) 14%, transparent);
+}
+body { background-image: radial-gradient(color-mix(in srgb, var(--ink) 9%, transparent) 1px, transparent 1.3px); background-size: 24px 24px; }
+
+/* Header */
+.hdr { background: color-mix(in srgb, var(--bg) 82%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
+.brand-icon { border-radius: var(--radius-sm); box-shadow: none; border-width: 0; }
+.brand-name { text-transform: none; font-size: 18px; }
+.hdr-nav a:not(.btn), .hdr-nav-btn { font-family: var(--font); text-transform: none; font-weight: 500; font-size: 15px; letter-spacing: 0; border-radius: var(--radius-sm); border: 0; }
+.hdr-nav a:not(.btn):hover, .hdr-nav-btn:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); }
+.dark-toggle { border-radius: 999px; border: 1px solid var(--line); }
+.dark-toggle:hover { background: var(--c-yellow); color: #000; }
+
+/* Buttons */
+.btn { border-radius: var(--radius-sm); text-transform: none; letter-spacing: 0; font-size: 15px; }
+.btn-lg { font-size: 16px; min-height: 54px; }
+.btn-sm { font-size: 14px; }
+
+/* Shared section type */
+.hero-h1, .section-h2, .cta-h2, .process-card h3, .svc-name, .mech-name, .mech-block-h, .mech-exp-area, .mech-bike-details h4, .hero-card-title, .ftr-brand-name { text-transform: none; }
+.eyebrow { padding: 0; background: none; border: 0; color: var(--ink-3); display: inline-flex; align-items: center; gap: 10px; font-size: 12px; }
+.eyebrow::before { content: ""; width: 10px; height: 10px; background: var(--c-yellow); border: 2px solid var(--ink); border-radius: 2px; }
+.section-h2 { font-size: clamp(2.1rem, 4.4vw, 3.5rem); line-height: 1; letter-spacing: -.035em; text-wrap: balance; }
+.text-link { text-transform: none; font-family: var(--font); font-size: 15px; border-bottom-width: 2px; letter-spacing: 0; }
+
+/* Hero */
+.hero { padding: 64px 0 88px; }
+.hero-pill { border-radius: 999px; box-shadow: none; border-width: 1.5px; background: var(--surface); color: var(--ink); font-size: 11.5px; }
+.hero-pill-dot { background: var(--c-green); border-radius: 999px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-green) 30%, transparent); }
+.hero-h1 { font-size: clamp(3rem, 7.4vw, 6rem); line-height: .95; letter-spacing: -.05em; }
+.hero-h1 mark { border-radius: var(--radius-sm); padding: 0 .12em; }
+.hero-sub { font-size: 18px; line-height: 1.6; color: var(--ink-3); font-weight: 400; }
+.hero-proof { border-radius: var(--radius); box-shadow: none; border: 1px solid var(--line); }
+.hero-proof-mark { border-radius: 999px; border: 0; }
+.hero-art { position: relative; display: block; padding-bottom: 72px; }
+.hero-photo { position: relative; margin: 0; aspect-ratio: 4 / 4.4; overflow: hidden; border: var(--bw) solid var(--ink); border-radius: var(--radius); box-shadow: var(--sh-lg); background: var(--surface); }
+.hero-photo img { width: 100%; height: 100%; object-fit: cover; object-position: 35% center; }
+.hero-photo-tag { position: absolute; top: 16px; left: 16px; padding: 6px 12px; border-radius: 999px; background: #000; color: #fff; font-family: var(--mono); font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.hero-card { position: absolute; left: -32px; right: 32px; bottom: 0; border-radius: var(--radius); box-shadow: var(--sh); overflow: hidden; }
+.hero-card-top { border-bottom-width: var(--bw); padding: 12px 18px; }
+.hero-card-title { font-size: 16px; }
+.hero-card-badge { border-radius: 999px; padding: 3px 10px; font-size: 10.5px; }
+.hero-svc-row { padding: 12px 18px; border-top: 1px solid var(--line); }
+.hero-service-empty { padding: 14px 18px; font-size: 14px; }
+
+/* Services */
+.svc-card, .svc-card:nth-child(5n+1), .svc-card:nth-child(5n+3), .svc-card:nth-child(5n+5) { background: var(--surface); color: var(--ink); }
+.svc-card { border-radius: var(--radius); box-shadow: var(--sh-sm); transition: transform .15s ease, box-shadow .15s ease; }
+.svc-card:first-child { background: var(--c-yellow); color: #000; }
+.svc-card:hover { transform: translate(-2px, -2px); box-shadow: var(--sh-lg); }
+.svc-foot { border-top: 1px solid color-mix(in srgb, currentColor 22%, transparent); }
+.svc-dur { border-radius: 999px; border-width: 1.5px; }
+.inline-err { padding: 18px 20px; border: 1.5px dashed var(--line); border-radius: var(--radius); color: var(--ink-3); background: var(--surface); }
+
+/* Process — dark band, yellow numerals */
+.section-alt { background: #111; color: #fff; border-block: 0; }
+.section-alt .eyebrow { color: #bdbdbd; }
+.section-alt .eyebrow::before { border-color: #fff; }
+.process-card { position: relative; border-radius: var(--radius); background: #1b1b1b; color: #fff; border: 1px solid #2e2e2e; box-shadow: none; padding: 28px 28px 32px; }
+.process-card p { color: #c4c4c4; }
+.process-step-num { display: block; margin-bottom: 18px; font-size: 56px; font-weight: 700; line-height: 1; letter-spacing: -.04em; color: var(--c-yellow); }
+.process-step-label { background: none; padding: 0; margin-bottom: 8px; color: #9a9a9a; font-size: 11.5px; }
+.process-card h3 { font-size: 22px; }
+
+/* Mechanic */
+.mech-photo-stack, .mech-info, .mech-build-card, .mech-exp-card, .mech-creds > section, .mech-avail, .mech-hl, .cert-row, .mech-profile-notice { border-radius: var(--radius); }
+.mech-info, .mech-creds > section { box-shadow: var(--sh-sm); }
+.mech-profile-notice { margin-top: 28px; display: flex; flex-wrap: wrap; align-items: center; gap: 18px; padding: 22px; background: var(--surface); border: 1.5px dashed var(--line); color: var(--ink-3); }
+.mech-avail { box-shadow: none; border-width: 1.5px; }
+.mech-avail-dot { border-radius: 999px; }
+.mech-build-count, .mech-skills-heading > span { border-radius: 999px; border-width: 1.5px; }
+
+/* Testimonials — calm surface instead of violet block */
+.testi-section { background: var(--surface); color: var(--ink); border-block: 1px solid var(--line); }
+.rating-block { border-radius: var(--radius); box-shadow: none; min-width: 190px; }
+.reviews-empty { border: 1.5px dashed var(--line); border-radius: var(--radius); background: var(--bg); color: var(--ink-3); }
+.testi-card { border-radius: var(--radius); box-shadow: var(--sh-sm); background: var(--bg); }
+.testi-av { border-radius: 999px; }
+
+/* CTA */
+.cta-col { border-radius: calc(var(--radius) * 1.6); box-shadow: var(--sh-lg); }
+.cta-col .eyebrow { color: #000; }
+.cta-col .eyebrow::before { background: #000; }
+.cta-h2 { font-size: clamp(2rem, 4.4vw, 3.5rem); line-height: 1; text-wrap: balance; }
+.btn-ghost { box-shadow: none; }
+.btn-ghost:hover:not(:disabled) { box-shadow: 4px 4px 0 rgba(0, 0, 0, .25); }
+
+/* Footer */
+.ftr { border-top: 0; }
+.ftr-highlight { border-radius: var(--radius-sm); }
+
+@media (max-width: 1000px) {
+  .hero-art { max-width: 560px; }
+  .hero-card { left: 16px; right: 16px; }
+}
+@media (max-width: 720px) {
+  .hero { padding: 40px 0 56px; }
+  .hero-photo { aspect-ratio: 4 / 3.4; }
+  .hero-art { padding-bottom: 0; }
+  .hero-card { position: relative; left: auto; right: auto; margin: -40px 12px 0; }
+  .process-step-num { font-size: 44px; }
+  .brand-sub { display: none; }
+  .brand-icon { width: 36px; height: 36px; }
+  .hdr-nav { flex-wrap: nowrap; }
+  .hdr-nav a:not(.btn), .hdr-nav-btn { font-size: 14px; padding: 0 6px; }
+  .hdr-nav .btn { margin-left: 2px; padding: 0 10px; }
+}
+@media (max-width: 480px) {
+  .hdr-nav a[href="/#mechanic"] { display: none; }
+  .brand-name { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .hdr-nav a:not(.btn), .hdr-nav-btn { white-space: nowrap; }
+}
