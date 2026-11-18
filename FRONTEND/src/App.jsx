@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { BrowserRouter, Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import api from './services/api'
 import RepairWorkspace from './components/RepairWorkspace'
+import ProcessStepper from './components/ProcessStepper'
+import { CountUp, RouteStage, SplitWords, useMotionSystem } from './motion'
 import mechanicPortrait from './assets/palluh.png'
 import mechanicHoverPortrait from './assets/palshy.png'
 import heroBikePhoto from './assets/bike-photo.jpg'
@@ -51,7 +53,7 @@ const ANIMATION_CONFIG = {
   // Mechanic portrait Ken-Burns
   portraitKenBurnsMs: 20000,
   // Shuffle interval for featured builds & certificates
-  shuffleEnabled: true,
+  shuffleEnabled: false,
   shuffleIntervalMs: 2000,
 }
 
@@ -77,13 +79,13 @@ function Header({ user, onLogout, dark, onToggleTheme }) {
           </span>
         </Link>
         <nav className="hdr-nav">
-          <Link to="/services">Services</Link>
+          <NavLink to="/services">Services</NavLink>
           <Link to={{ pathname: '/', hash: '#mechanic' }}>Mechanic</Link>
           {user ? (
             <>
-              <Link to={user.role === 'admin' ? '/admin' : '/account'}>
+              <NavLink to={user.role === 'admin' ? '/admin' : '/account'}>
                 {user.role === 'admin' ? 'Workshop' : 'My bookings'}
-              </Link>
+              </NavLink>
               <button className="hdr-nav-btn" onClick={onLogout}>Sign out</button>
             </>
           ) : (
@@ -103,6 +105,7 @@ function Header({ user, onLogout, dark, onToggleTheme }) {
           </button>
         </nav>
       </div>
+      <span className="scroll-progress" aria-hidden="true" />
     </header>
   )
 }
@@ -139,57 +142,6 @@ function Footer() {
       </div>
     </footer>
   )
-}
-
-function CursorEffects() {
-  const cursorRef = useRef(null)
-  const ringRef = useRef(null)
-
-  useEffect(() => {
-    const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)')
-    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
-    if (!finePointer.matches || reducedMotion.matches) return undefined
-
-    const cursor = cursorRef.current
-    const ring = ringRef.current
-    document.body.classList.add('cursor-effects-enabled')
-    const move = event => {
-      document.body.style.setProperty('--cursor-x', `${event.clientX}px`)
-      document.body.style.setProperty('--cursor-y', `${event.clientY}px`)
-      cursor.style.transform = `translate3d(${event.clientX}px, ${event.clientY}px, 0)`
-      ring.style.transform = `translate3d(${event.clientX}px, ${event.clientY}px, 0)`
-    }
-    const updateTarget = event => {
-      const target = event.target instanceof Element
-        ? event.target.closest('a, button, input, select, textarea, label, [role="button"]')
-        : null
-      document.body.classList.toggle('cursor-over-target', Boolean(target))
-      document.body.classList.toggle('cursor-native', Boolean(target?.matches('input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea, [contenteditable="true"]')))
-    }
-    const hide = () => document.body.classList.add('cursor-hidden')
-    const show = () => document.body.classList.remove('cursor-hidden')
-
-    window.addEventListener('pointermove', move, { passive: true })
-    window.addEventListener('pointerover', updateTarget, { passive: true })
-    window.addEventListener('pointerout', updateTarget, { passive: true })
-    document.documentElement.addEventListener('pointerleave', hide)
-    document.documentElement.addEventListener('pointerenter', show)
-    return () => {
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerover', updateTarget)
-      window.removeEventListener('pointerout', updateTarget)
-      document.documentElement.removeEventListener('pointerleave', hide)
-      document.documentElement.removeEventListener('pointerenter', show)
-      document.body.classList.remove('cursor-effects-enabled', 'cursor-over-target', 'cursor-native', 'cursor-hidden')
-      document.body.style.removeProperty('--cursor-x')
-      document.body.style.removeProperty('--cursor-y')
-    }
-  }, [])
-
-  return <div className="cursor-effects" aria-hidden="true">
-    <span ref={ringRef} className="cursor-effects-ring" />
-    <span ref={cursorRef} className="cursor-effects-dot" />
-  </div>
 }
 
 /* ── Service list ─────────────────────────────────────────── */
@@ -344,7 +296,7 @@ function Testimonials() {
     <section className="testi-section">
       <div className="testi-col">
         <div className="testi-hd"><div><span className="eyebrow">Feedback from completed repairs</span><h2 className="section-h2">Rider <mark>reviews.</mark></h2></div>
-          <div className="rating-block"><span className="rating-num">{Number(summary.count) ? average.toFixed(1) : "--"}</span><span className="rating-stars" aria-label={Number(summary.count) ? average.toFixed(1) + " out of 5 stars" : "No ratings yet"}>{Number(summary.count) ? String.fromCharCode(9733).repeat(Math.round(average)) : String.fromCharCode(9734).repeat(5)}</span><p className="rating-label">{Number(summary.count) ? summary.count + " verified reviews" : "No customer ratings yet"}</p></div>
+          <div className="rating-block"><span className="rating-num">{Number(summary.count) ? <CountUp value={average} decimals={1} /> : "--"}</span><span className="rating-stars" aria-label={Number(summary.count) ? average.toFixed(1) + " out of 5 stars" : "No ratings yet"}>{Number(summary.count) ? String.fromCharCode(9733).repeat(Math.round(average)) : String.fromCharCode(9734).repeat(5)}</span><p className="rating-label">{Number(summary.count) ? summary.count + " verified reviews" : "No customer ratings yet"}</p></div>
         </div>
         {error && <p className="reviews-empty">{error}</p>}
         {!error && !reviews.length ? <p className="reviews-empty">Customer comments and ratings will appear here after completed repairs.</p> : <div className="testi-grid">{reviews.map(review => <article className="testi-card" key={review.id}><div className="testi-stars" aria-label={review.rating + " stars"}>{String.fromCharCode(9733).repeat(Number(review.rating))}{String.fromCharCode(9734).repeat(5 - Number(review.rating))}</div><blockquote className="testi-quote">{review.comment}</blockquote><footer className="testi-footer"><div className="testi-av" aria-hidden="true">{review.is_anonymous ? "A" : (review.display_name || "R").slice(0, 1).toUpperCase()}</div><div><strong className="testi-name">{review.display_name}</strong><span className="testi-ride">{review.service_name}</span><span className="testi-svc">Completed {new Date(review.created_at).toLocaleDateString()}</span></div></footer></article>)}</div>}
@@ -352,6 +304,8 @@ function Testimonials() {
     </section>
   )
 }
+
+const TICKER_ITEMS = ['Clear estimates', 'Photo updates', 'Honest advice', 'One mechanic, start to finish', 'By appointment', `Made in ${CITY}`]
 
 function HeroServicePreview() {
   const [services, setServices] = useState([])
@@ -377,22 +331,23 @@ function Home() {
         <section className="hero">
           <div className="hero-inner">
             <div className="hero-copy">
-              <div className="hero-pill">
+              <div className="hero-pill hero-in" style={{ '--d': '0ms' }}>
                 <span className="hero-pill-dot" aria-hidden="true" />
                 Independent bicycle workshop · {CITY}
               </div>
               <h1 className="hero-h1">
-                Ride more.<br /><mark>Worry less.</mark>
+                <SplitWords text="Ride more." start={120} /><br />
+                <mark className="hero-mark"><SplitWords text="Worry less." start={300} /></mark>
               </h1>
-              <p className="hero-sub">
+              <p className="hero-sub hero-in" style={{ '--d': '520ms' }}>
                 Careful, honest bicycle service for {CITY} riders.
                 Thoughtful repairs, clear estimates, and updates at every step.
               </p>
-              <div className="hero-actions">
-                <Link className="btn btn-primary btn-lg" to="/book">Book a service</Link>
-                <Link className="btn btn-outline btn-lg" to="/services">See what we do</Link>
+              <div className="hero-actions hero-in" style={{ '--d': '640ms' }}>
+                <Link className="btn btn-primary btn-lg" to="/book" data-magnetic>Book a service <span className="arr" aria-hidden="true">→</span></Link>
+                <Link className="btn btn-outline btn-lg" to="/services" data-magnetic>See what we do</Link>
               </div>
-              <div className="hero-proof">
+              <div className="hero-proof hero-in" style={{ '--d': '760ms' }}>
                 <span className="hero-proof-mark" aria-hidden="true">✓</span>
                 <div className="hero-proof-text">
                   <b>Personal service, every time.</b>
@@ -403,11 +358,11 @@ function Home() {
 
             {/* Right — card stack */}
             <div className="hero-art">
-              <figure className="hero-photo">
+              <figure className="hero-photo" data-tilt>
                 <img src={heroBikePhoto} alt="Carbon hardtail mountain bike resting against a rust-coloured wall" fetchPriority="high" />
-                <figcaption className="hero-photo-tag">Tuned in {CITY}</figcaption>
+                <figcaption className="hero-photo-tag"><span className="live-dot" aria-hidden="true" />Tuned in {CITY}</figcaption>
               </figure>
-              <div className="hero-card">
+              <div className="hero-card hero-in" style={{ '--d': '950ms' }}>
                 <div className="hero-card-top">
                   <span className="hero-card-title">Popular services</span>
                   <span className="hero-card-badge">Workshop services</span>
@@ -418,6 +373,12 @@ function Home() {
           </div>
         </section>
 
+        <div className="ticker" aria-hidden="true">
+          <div className="ticker-track">
+            {[...TICKER_ITEMS, ...TICKER_ITEMS].map((item, index) => <span key={index}>{item}<i /></span>)}
+          </div>
+        </div>
+
         {/* Services */}
         <section className="section">
           <div className="col">
@@ -426,7 +387,7 @@ function Home() {
                 <span className="eyebrow">What we can help with</span>
                 <h2 className="section-h2">Services.</h2>
               </div>
-              <Link className="text-link" to="/services">View all services →</Link>
+              <Link className="text-link" to="/services">View all services <span className="arr" aria-hidden="true">→</span></Link>
             </div>
             <ServiceList />
           </div>
@@ -437,20 +398,7 @@ function Home() {
           <div className="col">
             <span className="eyebrow">A simple process</span>
             <h2 className="section-h2">From first message<br />to first ride back.</h2>
-            <div className="process-grid">
-              {[
-                { step: 'Step one',   title: "Tell us what's up",      body: "Choose a service, describe what you've noticed, and suggest a time." },
-                { step: 'Step two',   title: 'Get a clear repair plan', body: 'The mechanic reviews your request, confirms a slot, and answers any questions.' },
-                { step: 'Step three', title: 'Ride with confidence',    body: 'Approve the work, follow progress, and collect your bicycle.' },
-              ].map((c, index) => (
-                <article className="process-card" key={c.step}>
-                  <span className="process-step-num" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>
-                  <span className="process-step-label">{c.step}</span>
-                  <h3>{c.title}</h3>
-                  <p>{c.body}</p>
-                </article>
-              ))}
-            </div>
+            <ProcessStepper />
           </div>
         </section>
 
@@ -467,7 +415,7 @@ function Home() {
               <span className="eyebrow">Ready when you are</span>
               <h2 className="cta-h2">Let&apos;s get your bike<br />feeling right.</h2>
             </div>
-            <Link className="btn btn-ghost btn-lg" to="/book">Book a service →</Link>
+            <Link className="btn btn-ghost btn-lg" to="/book" data-magnetic>Book a service <span className="arr" aria-hidden="true">→</span></Link>
           </div>
         </section>
       </main>
@@ -2212,6 +2160,7 @@ function AppShell() {
   const [dark, setDark] = useState(() => {
     try { return localStorage.getItem('sw-theme') === 'dark' } catch { return false }
   })
+  useMotionSystem()
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light')
@@ -2231,13 +2180,13 @@ function AppShell() {
     window.location.assign('/')
   }
 
-  if (checking) return <div className="loading-screen">Loading…</div>
+  if (checking) return <div className="loading-screen" role="status"><span className="loader" aria-hidden="true" /><span>Loading…</span></div>
 
   return (
     <>
-      <CursorEffects />
       <Header user={user} onLogout={logout} dark={dark} onToggleTheme={() => setDark(current => !current)} />
       <ScrollManager />
+      <RouteStage>
       <Routes>
         <Route path="/"         element={<Home />} />
         <Route path="/services" element={<ServicesPage />} />
@@ -2250,6 +2199,7 @@ function AppShell() {
         <Route path="/admin"    element={<Guard user={user} role="admin">   <AdminPage    user={user} /></Guard>} />
         <Route path="*"         element={<Navigate to="/" replace />} />
       </Routes>
+      </RouteStage>
     </>
   )
 }
